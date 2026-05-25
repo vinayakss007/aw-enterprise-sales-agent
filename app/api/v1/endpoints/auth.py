@@ -45,22 +45,29 @@ async def register_user(
             status_code=400,
             detail="User with this email already exists"
         )
-    
-    # Create new user
+
+    # Create new tenant + user. The Tenant row is required because
+    # ``User.tenant_id`` is a ForeignKey with ON DELETE CASCADE; without it
+    # the insert would fail with a FK violation in Postgres.
+    from app.db.models.tenant import Tenant
+
     hashed_password = get_password_hash(user_in.password)
+    tenant_id = uuid.uuid4()
+    tenant = Tenant(id=tenant_id, name=f"{user_in.name}'s workspace")
     user = User(
         id=uuid.uuid4(),
-        tenant_id=uuid.uuid4(),  # Create new tenant for new user
+        tenant_id=tenant_id,
         email=user_in.email,
         name=user_in.name,
         hashed_password=hashed_password,
         role="owner"
     )
-    
+
+    db.add(tenant)
     db.add(user)
     db.commit()
     db.refresh(user)
-    
+
     return user
 
 @router.get("/me", response_model=UserResponse)

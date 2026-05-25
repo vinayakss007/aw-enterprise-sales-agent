@@ -39,6 +39,7 @@ def test_known_routes_registered():
         "/api/v1/customer/crm/sync/{lead_id}",
         "/api/v1/admin/users/",
         "/api/v1/admin/tenants/",
+        "/api/v1/admin/campaigns/tick",
         "/api/v1/health",
     }
     missing = expected_subset - paths

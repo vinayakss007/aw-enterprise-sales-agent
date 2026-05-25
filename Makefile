@@ -54,13 +54,13 @@ migrate-create:
 	alembic revision --autogenerate -m "$(m)"
 
 docker-up:
-	cd infra/docker && docker-compose up -d
+	docker compose up -d
 
 docker-down:
-	cd infra/docker && docker-compose down
+	docker compose down
 
 clean-db:
-	cd infra/docker && docker-compose down -v
+	docker compose down -v
 	docker volume prune -f
 
 format:

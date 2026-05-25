@@ -1,6 +1,6 @@
-from prometheus_client import Counter, Histogram, Gauge, Summary
-from typing import Dict, Any
 import time
+
+from prometheus_client import Counter, Histogram, Summary
 
 # Counter metrics
 api_requests_total = Counter(
@@ -73,7 +73,7 @@ def start_timer() -> float:
     """Start a timer"""
     return time.time()
 
-def record_timer_duration(timer_start: float, histogram, labels: Dict[str, str] = None):
+def record_timer_duration(timer_start: float, histogram, labels: dict[str, str] = None):
     """Record duration of an operation"""
     duration = time.time() - timer_start
     if labels:

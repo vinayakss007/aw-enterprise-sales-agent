@@ -49,7 +49,7 @@ enterprise-sales-agent/
 ## ⚙️ Database Integration
 
 ### TimescaleDB Connection
-- **Database URL**: `postgresql://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require`
+- **Database URL**: `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require`
 - **Supports**: TimescaleDB with pgvector extensions
 - **Schema**: Complete with tenant isolation
 - **Tables**: Users, Leads, Agent Executions, Campaigns, Usage Metrics, Audit Logs
@@ -165,7 +165,7 @@ enterprise-sales-agent/
 ```bash
 # Backend Environment Variables
 OPENAI_API_KEY=your_openai_api_key
-DATABASE_URL=postgresql://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require
 SECRET_KEY=generate_strong_secret
 SERPAPI_API_KEY=your_serpapi_key
 CLEARBIT_API_KEY=your_clearbit_key

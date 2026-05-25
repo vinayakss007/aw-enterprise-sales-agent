@@ -22,7 +22,7 @@ The complete enterprise-grade sales agent application has been built and verifie
 
 ## 🗄️ **DATABASE CONNECTION VERIFIED**
 
-✅ **Connected to**: `postgresql://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require`
+✅ **Connected to**: `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require`
 
 ✅ **Database Type**: PostgreSQL-compatible (TimescaleDB)
 

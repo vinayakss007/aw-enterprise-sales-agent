@@ -1,17 +1,16 @@
-from typing import List, Optional
-from sqlalchemy import func
-from sqlalchemy.orm import Session
 from datetime import datetime
+
+from sqlalchemy.orm import Session
+
 from app.db.models.user import User
-from app.db.models.tenant import Tenant
 from app.schemas.user import UserResponse, UserUpdate
-from app.core.security import get_password_hash
+
 
 class UserService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_all_users(self, skip: int = 0, limit: int = 50) -> List[UserResponse]:
+    async def get_all_users(self, skip: int = 0, limit: int = 50) -> list[UserResponse]:
         """
         Get all users across all tenants
         """
@@ -33,7 +32,7 @@ class UserService:
             for user in users
         ]
 
-    async def get_user(self, user_id: str) -> Optional[UserResponse]:
+    async def get_user(self, user_id: str) -> UserResponse | None:
         """
         Get a specific user by ID
         """
@@ -55,7 +54,7 @@ class UserService:
             updated_at=user.updated_at
         )
 
-    async def update_user(self, user_id: str, user_in: UserUpdate) -> Optional[UserResponse]:
+    async def update_user(self, user_id: str, user_in: UserUpdate) -> UserResponse | None:
         """
         Update user information
         """

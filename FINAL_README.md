@@ -59,7 +59,7 @@ DATABASE_URL=postgresql://username:password@hostname:port/database_name
 
 For TimescaleDB (which is PostgreSQL-compatible):
 ```env
-DATABASE_URL=postgresql://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require
 ```
 
 ## 🚀 Quick Start

@@ -23,7 +23,7 @@ The enterprise-grade sales agent application has been successfully built, tested
 - ✅ **Responsive Design**: Works on all device sizes
 
 ### **Database Connectivity**
-- ✅ **TimescaleDB Connection**: Verified with `postgresql://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require`
+- ✅ **TimescaleDB Connection**: Verified with `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require`
 - ✅ **Generic PostgreSQL Support**: Works with any PostgreSQL-compatible database
 - ✅ **Connection Pooling**: Optimized for production usage
 - ✅ **Transaction Management**: ACID-compliant operations

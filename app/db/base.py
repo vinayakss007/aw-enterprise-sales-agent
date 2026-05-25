@@ -1,25 +1,16 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
+"""Declarative base + canonical metadata.
 
-# Create engine and session
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_POOL_OVERFLOW,
-    echo=settings.DEBUG
-)
+All models import ``Base`` from here. The engine and session live in
+``app.db.session`` to keep this module free of side effects so that Alembic and
+test fixtures can import the metadata without touching the database.
+"""
+from __future__ import annotations
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from sqlalchemy.orm import DeclarativeBase
 
-Base = declarative_base()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+class Base(DeclarativeBase):
+    """Project-wide declarative base."""
 
-__all__ = ['engine', 'SessionLocal', 'Base', 'get_db']
+
+__all__ = ["Base"]

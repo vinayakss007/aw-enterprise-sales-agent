@@ -1,1 +1,1 @@
-from app.api.v1.endpoints.customer import leads, agent, campaigns, crm
+from app.api.v1.endpoints.customer import agent, campaigns, crm, leads

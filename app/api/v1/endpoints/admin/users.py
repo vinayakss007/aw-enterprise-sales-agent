@@ -1,16 +1,16 @@
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
 from sqlalchemy.orm import Session
-from app.db.session import get_db
+
+from app.api.deps import get_current_admin
 from app.db.models.user import User
+from app.db.session import get_db
 from app.schemas.user import UserResponse, UserUpdate
 from app.services.admin.user_service import UserService
-from app.api.deps import get_current_admin
-from app.core.security import get_password_hash
 
 router = APIRouter()
 
-@router.get("/", response_model=List[UserResponse])
+@router.get("/", response_model=list[UserResponse])
 async def list_users(
     skip: int = 0,
     limit: int = 100,

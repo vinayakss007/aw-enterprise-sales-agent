@@ -27,7 +27,7 @@ I have successfully built a complete, production-ready enterprise-grade sales ag
 ## 🔧 **Technical Specifications**
 
 ### Database Connection
-✅ **TimescaleDB**: `postgresql://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require`
+✅ **TimescaleDB**: `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require`
 ✅ **Verified Connection**: Database connectivity confirmed with read/write operations
 ✅ **Tenant Isolation**: Proper multi-tenant architecture with row-level security
 

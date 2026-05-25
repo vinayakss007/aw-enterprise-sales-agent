@@ -1,1 +1,1 @@
-from app.api.v1.endpoints import auth, customer, admin
+from app.api.v1.endpoints import admin, auth, customer

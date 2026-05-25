@@ -82,7 +82,7 @@ An enterprise-grade AI-powered sales agent platform with multi-CRM integration, 
 The application requires PostgreSQL with pgvector extension. You can use the provided TimescaleDB connection string:
 
 ```
-postgres://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require
+postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require
 ```
 
 ### Database Schema Initialization
@@ -122,7 +122,7 @@ cp frontend/.env.example frontend/.env
 3. Set required environment variables in `backend/.env`:
 ```bash
 OPENAI_API_KEY=your_openai_api_key
-DATABASE_URL=postgres://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require
 SECRET_KEY=generate_a_strong_secret_key
 ```
 
@@ -167,7 +167,7 @@ API_V1_STR=/api/v1
 DEBUG=true
 
 # Database
-DATABASE_URL=postgres://tsdbadmin:x2vm5sx9l1twlyzv@de65epw0cu.bc4seyfffs.tsdb.cloud.timescale.com:35895/tsdb?sslmode=require
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:PORT/DB?sslmode=require
 
 # Security
 SECRET_KEY=your-super-secret-key-change-in-production

@@ -1,10 +1,12 @@
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
-from sqlalchemy import and_, func
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 from app.db.models.audit_log import AuditLog
-from app.db.models.tenant import Tenant
 from app.schemas.audit import AuditLogResponse
+
 
 class AuditService:
     def __init__(self, db: Session):
@@ -12,15 +14,15 @@ class AuditService:
 
     async def get_audit_logs(
         self,
-        tenant_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        action: Optional[str] = None,
-        resource_type: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         limit: int = 50,
         offset: int = 0
-    ) -> List[AuditLogResponse]:
+    ) -> list[AuditLogResponse]:
         """
         Get audit logs with filtering options
         """
@@ -66,10 +68,10 @@ class AuditService:
 
     async def get_audit_summary(
         self,
-        tenant_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None
-    ) -> Dict[str, Any]:
+        tenant_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None
+    ) -> dict[str, Any]:
         """
         Get audit log summary statistics
         """

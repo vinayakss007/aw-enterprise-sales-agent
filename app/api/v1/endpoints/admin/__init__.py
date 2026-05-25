@@ -1,1 +1,1 @@
-from app.api.v1.endpoints.admin import users, tenants, usage, crm_config
+from app.api.v1.endpoints.admin import crm_config, tenants, usage, users

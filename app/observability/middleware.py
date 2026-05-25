@@ -1,12 +1,13 @@
+import logging
+import time
+
 from fastapi import Request, Response
-from fastapi.routing import APIRoute
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response as StarletteResponse
-from app.observability.metrics import api_requests_total, api_request_duration
+
+from app.observability.metrics import api_request_duration, api_requests_total
 from app.observability.tracing import tracer
-import time
-import logging
-from typing import Dict, Any
+
 
 class MetricsMiddleware(BaseHTTPMiddleware):
     """
@@ -43,7 +44,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             ).observe(duration)
             
             return response
-        except Exception as e:
+        except Exception:
             # Calculate duration for error case
             duration = time.time() - start_time
             

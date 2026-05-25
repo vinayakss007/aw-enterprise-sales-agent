@@ -12,7 +12,9 @@ from app.agents.sales_agent.state import AgentState
 from app.db.models.agent_execution import AgentExecution
 from app.db.models.lead import Lead
 from app.db.models.user import User
+from app.integrations.search.factory import get_search_provider
 from app.schemas.agent import AgentExecutionResponse
+from app.services.customer.knowledge_service import KnowledgeService
 
 
 def _lead_to_dict(lead: Lead) -> dict[str, Any]:
@@ -42,8 +44,15 @@ class AgentService:
         self.user = user
         self.tenant_id = user.tenant_id
         # Allow tests / callers to inject a custom agent (e.g. with a stubbed
-        # LLM provider). The default uses ``get_llm()``.
-        self.agent = agent or SalesAgent()
+        # LLM provider). The default wires the knowledge service + search
+        # provider so the agent can ground research in real web results and
+        # the tenant's knowledge base.
+        if agent is None:
+            agent = SalesAgent(
+                search=get_search_provider(),
+                knowledge=KnowledgeService(db),
+            )
+        self.agent = agent
 
     async def execute_agent(
         self, lead_id: str, agent_type: str = "research"

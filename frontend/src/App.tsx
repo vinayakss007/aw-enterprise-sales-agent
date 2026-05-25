@@ -20,6 +20,7 @@ import CustomerDashboard from './pages/customer/Dashboard';
 import LeadsPage from './pages/customer/Leads';
 import AgentPage from './pages/customer/Agent';
 import CampaignsPage from './pages/customer/Campaigns';
+import KnowledgePage from './pages/customer/Knowledge';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
@@ -117,6 +118,16 @@ const AppContent = () => {
               <ProtectedRoute>
                 <MainLayout>
                   <CampaignsPage />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/knowledge"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <KnowledgePage />
                 </MainLayout>
               </ProtectedRoute>
             }

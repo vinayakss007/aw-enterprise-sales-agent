@@ -32,6 +32,7 @@ class AgentState(TypedDict, total=False):
     # ---- Working memory ----
     research_results: dict[str, Any]
     enriched_data: dict[str, Any]
+    knowledge_results: list[dict[str, Any]]
     draft_email: str
     draft_subject: str
     verification_result: dict[str, Any]

@@ -1,13 +1,14 @@
 """Agent nodes.
 
 Each node:
-  * is an ``async`` function ``(state, llm) -> state``
-  * mutates the supplied state in-place (and returns it for chaining)
-  * appends a structured ``TrajectoryEntry`` describing what happened
+  * is an ``async`` function ``(state, ctx) -> state`` where ``ctx`` is an
+    ``AgentContext`` bundling the LLM + optional tools (search, knowledge).
+  * mutates the supplied state in-place (and returns it for chaining).
+  * appends a structured ``TrajectoryEntry`` describing what happened.
   * never raises through to the caller — it sets ``state['error']`` instead so
     the orchestrator can decide how to handle it.
 
-This shape is compatible with LangGraph nodes and can be dropped into a
+The shape is compatible with LangGraph nodes and can be dropped into a
 LangGraph ``StateGraph`` later without changing the function signatures.
 """
 from __future__ import annotations
@@ -16,7 +17,8 @@ import logging
 import time
 from typing import Any
 
-from app.agents.sales_agent.llm import LLMProvider, LLMResult
+from app.agents.sales_agent.context import AgentContext
+from app.agents.sales_agent.llm import LLMResult
 from app.agents.sales_agent.state import AgentState, TrajectoryEntry
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,14 @@ def _complete_entry(
     return entry
 
 
+def _skip_entry(entry: TrajectoryEntry, reason: str) -> TrajectoryEntry:
+    entry["status"] = "skipped"
+    entry["completed_at"] = time.time()
+    entry["duration_ms"] = int((entry["completed_at"] - entry["started_at"]) * 1000)
+    entry["details"] = {"reason": reason}
+    return entry
+
+
 def _fail_entry(entry: TrajectoryEntry, exc: BaseException) -> TrajectoryEntry:
     entry["status"] = "failed"
     entry["completed_at"] = time.time()
@@ -65,12 +75,12 @@ def _fail_entry(entry: TrajectoryEntry, exc: BaseException) -> TrajectoryEntry:
 # ---------------------------------------------------------------------------
 
 
-async def research_node(state: AgentState, llm: LLMProvider) -> AgentState:
+async def research_node(state: AgentState, ctx: AgentContext) -> AgentState:
     """Gather a brief profile of the target company.
 
-    Today this is purely a one-shot LLM call. Later this is the natural place
-    to wire in a search tool (SerpAPI, Tavily, Bing) so the model has fresh
-    facts to ground its summary.
+    When a ``SearchProvider`` is available on the context, the node fetches
+    the top results for "{company} news" and feeds the snippets to the LLM
+    as grounding. Without one, this falls back to a pure-LLM summary.
     """
     state["current_step"] = "research"
     entry = _start_entry("research")
@@ -78,38 +88,59 @@ async def research_node(state: AgentState, llm: LLMProvider) -> AgentState:
     company = lead.get("company") or "the prospect's company"
     domain = lead.get("domain") or ""
     title = lead.get("title") or "decision maker"
+
+    search_block = ""
+    search_results: list[dict[str, Any]] = []
+    if ctx.search is not None and (lead.get("company") or domain):
+        try:
+            query = f"{company} {domain}".strip()
+            hits = await ctx.search.search(query, limit=4)
+            search_results = [hit.to_dict() for hit in hits]
+            if hits:
+                search_block = "\n\nRecent web results:\n" + "\n".join(
+                    f"- {h.title} ({h.url}): {h.snippet}" for h in hits
+                )
+        except Exception as exc:  # pragma: no cover - tool failures shouldn't kill the run
+            logger.warning("research_node: search failed: %s", exc)
+
     try:
-        result = await llm.complete(
+        result = await ctx.llm.complete(
             [
                 {
                     "role": "system",
                     "content": (
                         "You are a B2B sales research assistant. Produce 2-3 "
                         "concise bullet points: industry, likely pain points, "
-                        "and a relevant trigger event."
+                        "and a relevant trigger event. Cite a search result "
+                        "URL where it strengthens a claim."
                     ),
                 },
                 {
                     "role": "user",
                     "content": (
                         f"Company: {company}\nDomain: {domain}\n"
-                        f"Contact title: {title}"
+                        f"Contact title: {title}{search_block}"
                     ),
                 },
             ],
-            max_tokens=256,
+            max_tokens=320,
         )
         state["research_results"] = {
             "summary": result.content,
             "company": company,
             "domain": domain,
+            "search": search_results,
         }
         _complete_entry(
             entry,
-            details={"summary_chars": len(result.content)},
+            details={
+                "summary_chars": len(result.content),
+                "search_results": len(search_results),
+                "search_provider": getattr(ctx.search, "provider", None) if ctx.search else None,
+            },
             llm=result,
         )
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         logger.exception("research_node failed")
         state["error"] = state.get("error") or f"research_node: {exc}"
         _fail_entry(entry, exc)
@@ -118,12 +149,13 @@ async def research_node(state: AgentState, llm: LLMProvider) -> AgentState:
     return state
 
 
-async def enrich_node(state: AgentState, llm: LLMProvider) -> AgentState:
+async def enrich_node(state: AgentState, ctx: AgentContext) -> AgentState:
     """Pull supplemental facts about the lead.
 
-    The current implementation is deterministic and offline — it derives a few
-    fields from ``lead.domain``. A real adapter (Clearbit/Apollo/Hunter) plugs
-    in here.
+    Today this derives a few fields from ``lead.domain``. The full
+    ``EnrichmentService`` (Clearbit etc.) lives at the customer-service
+    layer and is invoked from the leads endpoint, not from the agent
+    pipeline — keeps the agent free of DB calls.
     """
     state["current_step"] = "enrich"
     entry = _start_entry("enrich")
@@ -142,7 +174,58 @@ async def enrich_node(state: AgentState, llm: LLMProvider) -> AgentState:
     return state
 
 
-async def draft_email_node(state: AgentState, llm: LLMProvider) -> AgentState:
+async def knowledge_node(state: AgentState, ctx: AgentContext) -> AgentState:
+    """Retrieve relevant knowledge-base entries for the prospect.
+
+    Skips cleanly when no ``KnowledgeLookup`` is wired into the context,
+    so test runs without a DB never crash here. Results land in
+    ``state['knowledge_results']`` as a list of dicts so the
+    ``draft_email`` node can include them in the prompt.
+    """
+    state["current_step"] = "knowledge"
+    entry = _start_entry("knowledge")
+    if ctx.knowledge is None or not ctx.tenant_id:
+        _skip_entry(entry, "no knowledge provider configured")
+        _record(state, entry)
+        return state
+
+    lead = state.get("lead", {}) or {}
+    parts = [lead.get("company") or "", lead.get("title") or "", lead.get("domain") or ""]
+    query = " ".join(p for p in parts if p).strip()
+    if not query:
+        _skip_entry(entry, "empty query")
+        _record(state, entry)
+        return state
+
+    try:
+        matches = await ctx.knowledge.lookup(
+            query, tenant_id=str(ctx.tenant_id), limit=3
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("knowledge_node lookup failed: %s", exc)
+        _fail_entry(entry, exc)
+        _record(state, entry)
+        return state
+
+    state["knowledge_results"] = [
+        {
+            "id": m.id,
+            "title": m.title,
+            "content": m.content,
+            "category": m.category,
+            "tags": m.tags,
+            "score": m.score,
+        }
+        for m in matches
+    ]
+    _complete_entry(
+        entry, details={"matches": len(matches), "query_chars": len(query)}
+    )
+    _record(state, entry)
+    return state
+
+
+async def draft_email_node(state: AgentState, ctx: AgentContext) -> AgentState:
     """Generate the outreach email body and subject."""
     state["current_step"] = "draft_email"
     entry = _start_entry("draft_email")
@@ -150,8 +233,16 @@ async def draft_email_node(state: AgentState, llm: LLMProvider) -> AgentState:
     research = (state.get("research_results") or {}).get("summary", "")
     contact_name = lead.get("name") or "there"
     company = lead.get("company") or "your team"
+
+    knowledge = state.get("knowledge_results") or []
+    knowledge_block = ""
+    if knowledge:
+        knowledge_block = "\n\nRelevant talking points from the knowledge base:\n" + "\n".join(
+            f"- {m['title']}: {m['content'][:240]}" for m in knowledge[:3]
+        )
+
     try:
-        result = await llm.complete(
+        result = await ctx.llm.complete(
             [
                 {
                     "role": "system",
@@ -166,7 +257,7 @@ async def draft_email_node(state: AgentState, llm: LLMProvider) -> AgentState:
                     "role": "user",
                     "content": (
                         f"Contact: {contact_name}\nCompany: {company}\n"
-                        f"Research notes:\n{research}"
+                        f"Research notes:\n{research}{knowledge_block}"
                     ),
                 },
             ],
@@ -177,7 +268,11 @@ async def draft_email_node(state: AgentState, llm: LLMProvider) -> AgentState:
         state["draft_email"] = body
         _complete_entry(
             entry,
-            details={"subject": subject, "body_chars": len(body)},
+            details={
+                "subject": subject,
+                "body_chars": len(body),
+                "knowledge_used": len(knowledge),
+            },
             llm=result,
         )
     except Exception as exc:  # pragma: no cover
@@ -221,7 +316,7 @@ def _split_subject_body(content: str) -> tuple[str, str]:
     return subject or "Quick question", body or content.strip()
 
 
-async def verify_node(state: AgentState, llm: LLMProvider) -> AgentState:
+async def verify_node(state: AgentState, ctx: AgentContext) -> AgentState:
     """Sanity-check the draft before we declare success."""
     state["current_step"] = "verify"
     entry = _start_entry("verify")
@@ -243,6 +338,7 @@ async def verify_node(state: AgentState, llm: LLMProvider) -> AgentState:
 __all__ = [
     "research_node",
     "enrich_node",
+    "knowledge_node",
     "draft_email_node",
     "verify_node",
 ]

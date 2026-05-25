@@ -6,6 +6,7 @@ import {
   ChatBubbleLeftRightIcon, 
   ChartBarIcon, 
   Cog6ToothIcon,
+  BookOpenIcon,
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid, 
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Leads', href: '/leads', icon: UserGroupIcon, current: false },
   { name: 'Agent', href: '/agent', icon: ChatBubbleLeftRightIcon, current: false },
   { name: 'Campaigns', href: '/campaigns', icon: ChartBarIcon, current: false },
+  { name: 'Knowledge', href: '/knowledge', icon: BookOpenIcon, current: false },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon, current: false },
 ];
 

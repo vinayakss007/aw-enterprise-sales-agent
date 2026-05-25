@@ -1,8 +1,31 @@
 /**
- * Admin-only endpoints: tenants, users, usage metrics, campaign worker tick.
+ * Admin-only endpoints: tenants, users, usage metrics, campaign worker tick,
+ * audit log read + chain verification.
  */
 import { api } from './api';
 import type { Tenant, UsageMetrics, User, WorkerTickResult } from '../types';
+
+export interface AuditLogEntry {
+  id: number;
+  timestamp: string;
+  tenant_id: string;
+  user_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  changes_before: Record<string, unknown> | null;
+  changes_after: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  previous_hash: string | null;
+  current_hash: string | null;
+}
+
+export interface AuditChainResult {
+  verified: boolean;
+  count: number;
+  broken_at: number[];
+}
 
 export const adminService = {
   // Tenants
@@ -50,6 +73,25 @@ export const adminService = {
       null,
       { params: { batch_size: batchSize } }
     );
+    return response.data;
+  },
+
+  // Audit
+  async listAuditLogs(params?: {
+    action?: string;
+    resource_type?: string;
+    user_id?: string;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLogEntry[]> {
+    const response = await api.get<AuditLogEntry[]>('/admin/audit/', { params });
+    return response.data;
+  },
+
+  async verifyAuditChain(): Promise<AuditChainResult> {
+    const response = await api.get<AuditChainResult>('/admin/audit/verify');
     return response.data;
   },
 };

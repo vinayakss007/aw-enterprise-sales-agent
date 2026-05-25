@@ -25,6 +25,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import TenantsPage from './pages/admin/Tenants';
 import UsersPage from './pages/admin/Users';
 import UsagePage from './pages/admin/Usage';
+import AuditPage from './pages/admin/Audit';
 import SettingsPage from './pages/admin/Settings';
 
 // Components
@@ -157,6 +158,16 @@ const AppContent = () => {
               <AdminRoute>
                 <AdminLayout>
                   <UsagePage />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/audit"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AuditPage />
                 </AdminLayout>
               </AdminRoute>
             }

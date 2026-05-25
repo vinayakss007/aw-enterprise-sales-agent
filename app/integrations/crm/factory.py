@@ -34,6 +34,21 @@ def _build_adapter(provider: str, credentials: dict[str, Any]) -> CRMAdapter | N
             logger.warning("HubSpot CRM configured but no access_token provided")
             return None
         return HubSpotCRMAdapter(access_token=token)
+    if provider == "salesforce":
+        from app.integrations.crm.salesforce import SalesforceCRMAdapter
+
+        token = credentials.get("access_token") or credentials.get("token")
+        instance_url = credentials.get("instance_url")
+        if not token or not instance_url:
+            logger.warning(
+                "Salesforce CRM configured but missing access_token / instance_url"
+            )
+            return None
+        return SalesforceCRMAdapter(
+            access_token=token,
+            instance_url=instance_url,
+            api_version=credentials.get("api_version", "v60.0"),
+        )
     logger.warning("Unknown CRM provider %r — falling back to mock", provider)
     return None
 

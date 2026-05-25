@@ -1,53 +1,56 @@
+/**
+ * Campaign CRUD + state-transition endpoints.
+ *
+ * ``addLeads`` posts ``lead_ids`` as the request body itself (the backend
+ * accepts a bare ``list[str]``), not wrapped in an envelope.
+ */
 import { api } from './api';
-import { Campaign } from '../types';
+import type { Campaign, CampaignCreate, CampaignUpdate } from '../types';
 
-// Campaign-related API calls
 export const campaignService = {
-  // Get campaigns
-  getCampaigns: async (params?: { skip?: number; limit?: number }) => {
-    const response = await api.get('/customer/campaigns', { params });
-    return response.data as Campaign[];
-  },
-
-  // Get campaign by ID
-  getCampaign: async (campaignId: string) => {
-    const response = await api.get(`/customer/campaigns/${campaignId}`);
-    return response.data as Campaign;
-  },
-
-  // Create campaign
-  createCampaign: async (campaignData: Partial<Campaign>) => {
-    const response = await api.post('/customer/campaigns', campaignData);
-    return response.data as Campaign;
-  },
-
-  // Update campaign
-  updateCampaign: async (campaignId: string, campaignData: Partial<Campaign>) => {
-    const response = await api.put(`/customer/campaigns/${campaignId}`, campaignData);
-    return response.data as Campaign;
-  },
-
-  // Delete campaign
-  deleteCampaign: async (campaignId: string) => {
-    const response = await api.delete(`/customer/campaigns/${campaignId}`);
+  async list(params?: { skip?: number; limit?: number }): Promise<Campaign[]> {
+    const response = await api.get<Campaign[]>('/customer/campaigns/', { params });
     return response.data;
   },
 
-  // Activate campaign
-  activateCampaign: async (campaignId: string) => {
-    const response = await api.post(`/customer/campaigns/${campaignId}/activate`);
+  async get(campaignId: string): Promise<Campaign> {
+    const response = await api.get<Campaign>(`/customer/campaigns/${campaignId}`);
     return response.data;
   },
 
-  // Deactivate campaign
-  deactivateCampaign: async (campaignId: string) => {
-    const response = await api.post(`/customer/campaigns/${campaignId}/deactivate`);
+  async create(payload: CampaignCreate): Promise<Campaign> {
+    const response = await api.post<Campaign>('/customer/campaigns/', payload);
     return response.data;
   },
 
-  // Add leads to campaign
-  addLeadsToCampaign: async (campaignId: string, leadIds: string[]) => {
-    const response = await api.post(`/customer/campaigns/${campaignId}/add-leads`, { lead_ids: leadIds });
+  async update(campaignId: string, payload: CampaignUpdate): Promise<Campaign> {
+    const response = await api.put<Campaign>(`/customer/campaigns/${campaignId}`, payload);
     return response.data;
-  }
+  },
+
+  async remove(campaignId: string): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/customer/campaigns/${campaignId}`);
+    return response.data;
+  },
+
+  async activate(campaignId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/customer/campaigns/${campaignId}/activate`);
+    return response.data;
+  },
+
+  async deactivate(campaignId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/customer/campaigns/${campaignId}/deactivate`);
+    return response.data;
+  },
+
+  async addLeads(campaignId: string, leadIds: string[]) {
+    const response = await api.post(`/customer/campaigns/${campaignId}/add-leads`, leadIds);
+    return response.data as {
+      added_leads: number;
+      total_requested: number;
+      campaign_id: string;
+    };
+  },
 };
+
+export default campaignService;

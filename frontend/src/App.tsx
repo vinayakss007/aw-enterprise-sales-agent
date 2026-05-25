@@ -56,7 +56,7 @@ const Loading = () => (
 
 // Main application component
 const AppContent = () => {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return <Loading />;

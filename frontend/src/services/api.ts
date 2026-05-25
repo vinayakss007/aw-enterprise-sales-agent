@@ -25,38 +25,24 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token refresh
+// Response interceptor — on 401, drop the (now-invalid) token and bounce
+// back to /login. Skip the redirect on the auth endpoints themselves so the
+// LoginPage can show the inline error message instead of an instant reload.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      // Try to refresh token
-      const refreshToken = localStorage.getItem('es_agent_refresh_token');
-      if (refreshToken) {
-        try {
-          // Implement token refresh logic here
-          // For now, just redirect to login
-          localStorage.removeItem('es_agent_token');
-          localStorage.removeItem('es_agent_refresh_token');
-          window.location.href = '/login';
-        } catch (refreshError) {
-          // If refresh fails, redirect to login
-          localStorage.removeItem('es_agent_token');
-          localStorage.removeItem('es_agent_refresh_token');
-          window.location.href = '/login';
-        }
-      } else {
-        // No refresh token, redirect to login
+    const status = error.response?.status;
+    const url: string | undefined = error.config?.url;
+    const isAuthCall = !!url && (url.includes('/auth/token') || url.includes('/auth/register'));
+    if (status === 401 && !isAuthCall && typeof window !== 'undefined') {
+      localStorage.removeItem('es_agent_token');
+      if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
-    
     return Promise.reject(error);
   }
 );
 
 export { api };
+export default api;

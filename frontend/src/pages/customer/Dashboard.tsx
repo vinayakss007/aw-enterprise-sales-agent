@@ -1,273 +1,239 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  UserGroupIcon, 
-  ChatBubbleLeftRightIcon, 
-  CalendarIcon, 
+import { Link } from 'react-router-dom';
+import {
   ChartBarIcon,
-  Cog6ToothIcon
+  ChatBubbleLeftRightIcon,
+  Cog6ToothIcon,
+  CurrencyDollarIcon,
+  PlayIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
-import { api } from '../../services/api';
-import { Lead, AgentExecution } from '../../types';
+
+import agentService from '../../services/agentService';
+import campaignService from '../../services/campaignService';
+import leadService from '../../services/leadService';
+import type { AgentExecution, Lead } from '../../types';
+
+const formatRelative = (iso: string) => new Date(iso).toLocaleString();
+
+const StatCard: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  icon: React.ComponentType<{ className?: string }>;
+  bg: string;
+  loading?: boolean;
+}> = ({ label, value, icon: Icon, bg, loading }) => (
+  <div className="bg-white overflow-hidden shadow rounded-lg">
+    <div className="px-4 py-5 sm:p-6">
+      <div className="flex items-center">
+        <div className={`flex-shrink-0 ${bg} rounded-md p-3`}>
+          <Icon className="h-6 w-6 text-white" />
+        </div>
+        <div className="ml-5 w-0 flex-1">
+          <dt className="text-sm font-medium text-gray-500 truncate">{label}</dt>
+          <dd className="text-2xl font-semibold text-gray-900">
+            {loading ? '…' : value}
+          </dd>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 const CustomerDashboard: React.FC = () => {
-  // Fetch dashboard metrics
-  const { data: metrics, isLoading: isMetricsLoading } = useQuery({
-    queryKey: ['dashboard-metrics'],
-    queryFn: async () => {
-      // Mock data for demo
-      return {
-        totalLeads: 243,
-        meetingsBooked: 18,
-        responseRate: 32,
-        pipelineValue: 124000
-      };
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+  const leadsQuery = useQuery<Lead[]>({
+    queryKey: ['leads', 'dashboard'],
+    queryFn: () => leadService.list({ limit: 100 }),
   });
 
-  // Fetch recent leads
-  const { data: leads, isLoading: isLeadsLoading } = useQuery({
-    queryKey: ['recent-leads'],
-    queryFn: async () => {
-      // This would be an API call in a real app
-      const mockLeads: Lead[] = [
-        { id: '1', name: 'John Smith', company: 'Acme Corp', status: 'contacted', created_at: '2023-05-15T10:30:00Z', updated_at: '2023-05-15T10:30:00Z', tenant_id: '1', user_id: '1', source: 'agent' },
-        { id: '2', name: 'Sarah Johnson', company: 'Tech Solutions', status: 'new', created_at: '2023-05-16T14:20:00Z', updated_at: '2023-05-16T14:20:00Z', tenant_id: '1', user_id: '1', source: 'agent' },
-        { id: '3', name: 'Mike Williams', company: 'Global Inc', status: 'qualified', created_at: '2023-05-17T09:15:00Z', updated_at: '2023-05-17T09:15:00Z', tenant_id: '1', user_id: '1', source: 'agent' },
-      ];
-      return mockLeads;
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+  const executionsQuery = useQuery<AgentExecution[]>({
+    queryKey: ['agent-executions', 'dashboard'],
+    queryFn: () => agentService.listExecutions({ limit: 50 }),
   });
 
-  // Fetch recent agent executions
-  const { data: agentExecutions, isLoading: isAgentExecutionsLoading } = useQuery({
-    queryKey: ['recent-agent-executions'],
-    queryFn: async () => {
-      // This would be an API call in a real app
-      const mockExecutions: AgentExecution[] = [
-        { id: '1', lead_id: '1', user_id: '1', tenant_id: '1', agent_type: 'research', success: true, started_at: '2023-05-15T11:00:00Z', completed_at: '2023-05-15T11:02:00Z', created_at: '2023-05-15T11:00:00Z', updated_at: '2023-05-15T11:02:00Z', cost_cents: 15, tokens_input: 120, tokens_output: 80, trajectory: '[]' },
-        { id: '2', lead_id: '2', user_id: '1', tenant_id: '1', agent_type: 'research', success: true, started_at: '2023-05-16T15:00:00Z', completed_at: '2023-05-16T15:01:30Z', created_at: '2023-05-16T15:00:00Z', updated_at: '2023-05-16T15:01:30Z', cost_cents: 12, tokens_input: 95, tokens_output: 65, trajectory: '[]' },
-      ];
-      return mockExecutions;
-    },
-    staleTime: 2 * 60 * 1000, // 2 minutes
+  const campaignsQuery = useQuery({
+    queryKey: ['campaigns', 'dashboard'],
+    queryFn: () => campaignService.list({ limit: 100 }),
   });
+
+  const activeLeads =
+    leadsQuery.data?.filter((l) => l.status !== 'archived').length ?? 0;
+  const successfulRuns =
+    executionsQuery.data?.filter((e) => e.success).length ?? 0;
+  const totalRuns = executionsQuery.data?.length ?? 0;
+  const responseRate =
+    totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0;
+  const totalCostCents =
+    executionsQuery.data?.reduce((acc, e) => acc + (e.cost_cents || 0), 0) ?? 0;
+  const activeCampaigns =
+    campaignsQuery.data?.filter((c) => c.status === 'active').length ?? 0;
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Welcome back! Here's what's happening with your sales activities.
+            Live view of your leads, agent runs and campaigns.
           </p>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
-                <UserGroupIcon className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Active Leads</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">
-                      {isMetricsLoading ? '...' : metrics?.totalLeads}
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-green-500 rounded-md p-3">
-                <CalendarIcon className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Meetings Booked</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">
-                      {isMetricsLoading ? '...' : metrics?.meetingsBooked}
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-blue-500 rounded-md p-3">
-                <ChatBubbleLeftRightIcon className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Response Rate</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">
-                      {isMetricsLoading ? '...' : `${metrics?.responseRate}%`}
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-purple-500 rounded-md p-3">
-                <ChartBarIcon className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Pipeline Value</dt>
-                  <dd className="flex items-baseline">
-                    <div className="text-2xl font-semibold text-gray-900">
-                      {isMetricsLoading ? '...' : metrics ? `$${(metrics.pipelineValue / 1000).toFixed(0)}K` : ''}
-                    </div>
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          label="Active leads"
+          value={activeLeads}
+          icon={UserGroupIcon}
+          bg="bg-indigo-500"
+          loading={leadsQuery.isLoading}
+        />
+        <StatCard
+          label="Agent runs (success rate)"
+          value={`${totalRuns} (${responseRate}%)`}
+          icon={ChatBubbleLeftRightIcon}
+          bg="bg-blue-500"
+          loading={executionsQuery.isLoading}
+        />
+        <StatCard
+          label="Active campaigns"
+          value={activeCampaigns}
+          icon={ChartBarIcon}
+          bg="bg-green-500"
+          loading={campaignsQuery.isLoading}
+        />
+        <StatCard
+          label="Spend"
+          value={`$${(totalCostCents / 100).toFixed(2)}`}
+          icon={CurrencyDollarIcon}
+          bg="bg-purple-500"
+          loading={executionsQuery.isLoading}
+        />
       </div>
 
-      {/* Recent activity */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Recent Leads */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Recent Leads</h3>
+          <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex justify-between items-center">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Recent leads</h3>
+            <Link to="/leads" className="text-sm text-indigo-600 hover:text-indigo-500">
+              View all
+            </Link>
           </div>
-          <ul className="divide-y divide-gray-200">
-            {isLeadsLoading ? (
-              <li className="px-4 py-4 sm:px-6">
-                <div className="animate-pulse flex space-x-4">
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded"></div>
-                    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                  </div>
-                </div>
-              </li>
-            ) : (
-              leads?.slice(0, 5).map((lead) => (
+          {leadsQuery.isLoading ? (
+            <p className="p-6 text-sm text-gray-500">Loading…</p>
+          ) : leadsQuery.data && leadsQuery.data.length > 0 ? (
+            <ul className="divide-y divide-gray-200">
+              {leadsQuery.data.slice(0, 5).map((lead) => (
                 <li key={lead.id} className="px-4 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium text-indigo-600 truncate">{lead.name}</div>
-                    <div className="ml-2 flex-shrink-0 flex">
+                    <div>
+                      <p className="text-sm font-medium text-indigo-600">
+                        {lead.name || lead.email || '(unnamed lead)'}
+                      </p>
+                      <p className="text-sm text-gray-500">{lead.company}</p>
+                    </div>
+                    <div className="text-right">
                       <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                         {lead.status}
                       </span>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {formatRelative(lead.created_at)}
+                      </p>
                     </div>
-                  </div>
-                  <div className="mt-2 flex justify-between text-sm text-gray-500">
-                    <p className="truncate">{lead.company}</p>
-                    <p>{new Date(lead.created_at).toLocaleDateString()}</p>
                   </div>
                 </li>
-              ))
-            )}
-          </ul>
+              ))}
+            </ul>
+          ) : (
+            <p className="p-6 text-sm text-gray-500">No leads yet.</p>
+          )}
         </div>
 
-        {/* Recent Agent Executions */}
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-          <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Recent Agent Executions</h3>
+          <div className="px-4 py-5 border-b border-gray-200 sm:px-6 flex justify-between items-center">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">Recent agent runs</h3>
+            <Link to="/agent" className="text-sm text-indigo-600 hover:text-indigo-500">
+              Open agent
+            </Link>
           </div>
-          <ul className="divide-y divide-gray-200">
-            {isAgentExecutionsLoading ? (
-              <li className="px-4 py-4 sm:px-6">
-                <div className="animate-pulse flex space-x-4">
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                    <div className="h-4 bg-gray-200 rounded"></div>
-                    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                  </div>
-                </div>
-              </li>
-            ) : (
-              agentExecutions?.slice(0, 5).map((execution) => (
+          {executionsQuery.isLoading ? (
+            <p className="p-6 text-sm text-gray-500">Loading…</p>
+          ) : executionsQuery.data && executionsQuery.data.length > 0 ? (
+            <ul className="divide-y divide-gray-200">
+              {executionsQuery.data.slice(0, 5).map((execution) => (
                 <li key={execution.id} className="px-4 py-4 sm:px-6">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm font-medium text-indigo-600 truncate">
-                      {execution.agent_type} agent
-                    </div>
-                    <div className="ml-2 flex-shrink-0 flex">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        execution.success 
-                          ? 'bg-green-100 text-green-800' 
+                    <p className="text-sm font-medium text-indigo-600">
+                      {execution.agent_type}
+                    </p>
+                    <span
+                      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        execution.success
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
-                      }`}>
-                        {execution.success ? 'Success' : 'Failed'}
-                      </span>
-                    </div>
+                      }`}
+                    >
+                      {execution.success ? 'Success' : 'Failed'}
+                    </span>
                   </div>
                   <div className="mt-2 flex justify-between text-sm text-gray-500">
                     <p>${(execution.cost_cents / 100).toFixed(2)}</p>
-                    <p>{new Date(execution.started_at).toLocaleString()}</p>
+                    <p>{formatRelative(execution.started_at)}</p>
                   </div>
                 </li>
-              ))
-            )}
-          </ul>
+              ))}
+            </ul>
+          ) : (
+            <p className="p-6 text-sm text-gray-500">No agent runs yet.</p>
+          )}
         </div>
       </div>
 
-      {/* Quick actions */}
-      <div className="mt-8">
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
+      <div>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+          Quick actions
+        </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <button className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow">
+          <Link
+            to="/leads"
+            className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow"
+          >
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white">
               <UserGroupIcon className="h-6 w-6" />
             </div>
-            <h4 className="mt-4 text-sm font-medium text-gray-900">Add Lead</h4>
+            <h4 className="mt-4 text-sm font-medium text-gray-900">Add lead</h4>
             <p className="mt-1 text-sm text-gray-500">Add a new lead to your database</p>
-          </button>
-          
-          <button className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow">
+          </Link>
+          <Link
+            to="/agent"
+            className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow"
+          >
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-md bg-green-500 text-white">
-              <ChatBubbleLeftRightIcon className="h-6 w-6" />
+              <PlayIcon className="h-6 w-6" />
             </div>
-            <h4 className="mt-4 text-sm font-medium text-gray-900">Run Agent</h4>
+            <h4 className="mt-4 text-sm font-medium text-gray-900">Run agent</h4>
             <p className="mt-1 text-sm text-gray-500">Execute an AI agent on a lead</p>
-          </button>
-          
-          <button className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow">
+          </Link>
+          <Link
+            to="/campaigns"
+            className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow"
+          >
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-md bg-blue-500 text-white">
               <ChartBarIcon className="h-6 w-6" />
             </div>
-            <h4 className="mt-4 text-sm font-medium text-gray-900">Create Campaign</h4>
+            <h4 className="mt-4 text-sm font-medium text-gray-900">Create campaign</h4>
             <p className="mt-1 text-sm text-gray-500">Start a new outreach campaign</p>
-          </button>
-          
-          <button className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow">
+          </Link>
+          <Link
+            to="/admin/settings"
+            className="bg-white shadow rounded-lg p-6 text-center hover:shadow-md transition-shadow"
+          >
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-md bg-purple-500 text-white">
               <Cog6ToothIcon className="h-6 w-6" />
             </div>
-            <h4 className="mt-4 text-sm font-medium text-gray-900">Sync CRM</h4>
-            <p className="mt-1 text-sm text-gray-500">Sync with your CRM system</p>
-          </button>
+            <h4 className="mt-4 text-sm font-medium text-gray-900">Configure CRM</h4>
+            <p className="mt-1 text-sm text-gray-500">Connect HubSpot or another CRM</p>
+          </Link>
         </div>
       </div>
     </div>

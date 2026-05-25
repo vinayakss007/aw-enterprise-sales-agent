@@ -64,6 +64,7 @@ def test_worker_stats_as_dict_round_trips():
     stats.completed = 1
     stats.failed = 1
     stats.emails_sent = 2
+    stats.agent_runs = 1
     stats.errors.append("a/b: boom")
     payload = stats.as_dict()
     assert payload == {
@@ -73,6 +74,7 @@ def test_worker_stats_as_dict_round_trips():
         "failed": 1,
         "skipped": 0,
         "emails_sent": 2,
+        "agent_runs": 1,
         "errors": ["a/b: boom"],
     }
 

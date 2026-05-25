@@ -459,6 +459,7 @@ async def test_admin_tick_endpoint(client):
         "failed": 0,
         "skipped": 0,
         "emails_sent": 0,
+        "agent_runs": 0,
         "errors": [],
     }
 
@@ -467,3 +468,136 @@ async def test_admin_tick_endpoint(client):
 async def test_admin_tick_endpoint_rejects_unauthenticated(client):
     resp = client.post("/api/v1/admin/campaigns/tick")
     assert resp.status_code in (401, 403)
+
+
+
+@pytest.mark.asyncio
+async def test_agent_mode_step_drafts_with_agent_and_persists_execution(
+    db_session, tenant_and_user, lead_factory
+):
+    """Empty step content triggers SalesAgent + AgentExecution row."""
+    import uuid
+
+    from app.db.models.agent_execution import AgentExecution
+    from app.db.models.campaign import CampaignAssignment
+    from app.integrations.email.console import ConsoleEmailSender
+    from app.workers.campaigns import CampaignWorker
+
+    tenant, user = tenant_and_user
+    # Empty content → agent mode.
+    campaign = _make_campaign(
+        db_session,
+        tenant,
+        user,
+        [{"order": 1, "type": "email", "subject": "", "content": ""}],
+    )
+    campaign.status = "active"
+    db_session.commit()
+
+    lead = lead_factory(
+        tenant.id, user.id, name="Pat Patterson", company="Target Inc"
+    )
+    db_session.add(
+        CampaignAssignment(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            lead_id=lead.id,
+            status="pending",
+            next_action_date=datetime.utcnow() - timedelta(seconds=1),
+        )
+    )
+    db_session.commit()
+
+    sender = ConsoleEmailSender()
+    worker = CampaignWorker(db_session, email_sender=sender)
+    stats = await worker.process_due_assignments()
+
+    assert stats.processed == 1
+    assert stats.completed == 1
+    assert stats.emails_sent == 1
+    assert stats.agent_runs == 1
+
+    # An AgentExecution row was persisted with the campaign_email type.
+    executions = (
+        db_session.query(AgentExecution)
+        .filter(
+            AgentExecution.tenant_id == tenant.id,
+            AgentExecution.lead_id == lead.id,
+        )
+        .all()
+    )
+    assert len(executions) == 1
+    exe = executions[0]
+    assert exe.agent_type == "campaign_email"
+    assert exe.tokens_input >= 1
+    assert exe.tokens_output >= 1
+    assert isinstance(exe.trajectory, list)
+    assert {entry["step"] for entry in exe.trajectory} == {
+        "research",
+        "enrich",
+        "draft_email",
+        "verify",
+    }
+
+    # The email body came from the agent's draft, not a static template.
+    assert sender.sent[0].to == "pat@target.test"
+    assert len(sender.sent[0].body) >= 30
+
+
+@pytest.mark.asyncio
+async def test_marker_in_content_also_triggers_agent_mode(
+    db_session, tenant_and_user, lead_factory
+):
+    """``[[agent]]`` anywhere in the content flips the step to agent mode."""
+    import uuid
+
+    from app.db.models.agent_execution import AgentExecution
+    from app.db.models.campaign import CampaignAssignment
+    from app.integrations.email.console import ConsoleEmailSender
+    from app.workers.campaigns import CampaignWorker
+
+    tenant, user = tenant_and_user
+    campaign = _make_campaign(
+        db_session,
+        tenant,
+        user,
+        [
+            {
+                "order": 1,
+                "type": "email",
+                "subject": "ignored",
+                "content": "please [[agent]] write this",
+            }
+        ],
+    )
+    campaign.status = "active"
+    db_session.commit()
+
+    lead = lead_factory(tenant.id, user.id)
+    db_session.add(
+        CampaignAssignment(
+            id=uuid.uuid4(),
+            campaign_id=campaign.id,
+            lead_id=lead.id,
+            status="pending",
+            next_action_date=datetime.utcnow() - timedelta(seconds=1),
+        )
+    )
+    db_session.commit()
+
+    sender = ConsoleEmailSender()
+    stats = await CampaignWorker(
+        db_session, email_sender=sender
+    ).process_due_assignments()
+
+    assert stats.agent_runs == 1
+    assert stats.emails_sent == 1
+    # The "[[agent]]" marker should NOT appear in the sent body.
+    assert "[[agent]]" not in sender.sent[0].body.lower()
+    # AgentExecution was persisted.
+    assert (
+        db_session.query(AgentExecution)
+        .filter(AgentExecution.lead_id == lead.id)
+        .count()
+        == 1
+    )

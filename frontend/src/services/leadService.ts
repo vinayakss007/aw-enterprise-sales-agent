@@ -1,13 +1,20 @@
 /**
- * Lead CRUD endpoints.
+ * Lead CRUD endpoints + bulk + enrichment helpers.
  *
  * Mirrors ``/api/v1/customer/leads/``. Note that ``delete`` archives the
- * lead (sets status="archived") rather than hard-deleting — the backend
+ * lead (sets status="archived") rather than hard-deleting - the backend
  * does the soft-delete; we surface it as ``archive`` here so the UI is
  * honest about what's happening.
  */
 import { api } from './api';
 import type { Lead, LeadCreate, LeadUpdate } from '../types';
+
+export interface ImportReport {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; error: string }[];
+}
 
 export const leadService = {
   async list(params?: { skip?: number; limit?: number }): Promise<Lead[]> {
@@ -33,6 +40,29 @@ export const leadService = {
   async archive(leadId: string): Promise<{ message: string }> {
     const response = await api.delete<{ message: string }>(`/customer/leads/${leadId}`);
     return response.data;
+  },
+
+  async enrich(leadId: string): Promise<Lead> {
+    const response = await api.post<Lead>(`/customer/leads/${leadId}/enrich`);
+    return response.data;
+  },
+
+  async importCsv(file: File): Promise<ImportReport> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await api.post<ImportReport>(
+      '/customer/leads/import',
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  },
+
+  async exportCsv(): Promise<Blob> {
+    const response = await api.get('/customer/leads/export.csv', {
+      responseType: 'blob',
+    });
+    return response.data as Blob;
   },
 };
 

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToastProvider } from './contexts/ToastContext';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -19,12 +20,14 @@ import CustomerDashboard from './pages/customer/Dashboard';
 import LeadsPage from './pages/customer/Leads';
 import AgentPage from './pages/customer/Agent';
 import CampaignsPage from './pages/customer/Campaigns';
+import KnowledgePage from './pages/customer/Knowledge';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
 import TenantsPage from './pages/admin/Tenants';
 import UsersPage from './pages/admin/Users';
 import UsagePage from './pages/admin/Usage';
+import AuditPage from './pages/admin/Audit';
 import SettingsPage from './pages/admin/Settings';
 
 // Components
@@ -56,7 +59,7 @@ const Loading = () => (
 
 // Main application component
 const AppContent = () => {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) {
     return <Loading />;
@@ -69,7 +72,7 @@ const AppContent = () => {
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          
+
           {/* Customer routes */}
           <Route
             path="/"
@@ -119,6 +122,16 @@ const AppContent = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/knowledge"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <KnowledgePage />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Admin routes */}
           <Route
@@ -162,6 +175,16 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/admin/audit"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AuditPage />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
             path="/admin/settings"
             element={
               <AdminRoute>
@@ -185,9 +208,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

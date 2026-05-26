@@ -2,25 +2,25 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    postgresql-server-dev-all \
+# Build deps for psycopg / cryptography wheels.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file and install Python dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir --timeout=300 --default-timeout=300 -r requirements.txt
+# Install Python dependencies first to leverage Docker layer caching.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --timeout=300 -r requirements.txt
 
-# Install additional packages that may be needed
-RUN pip install psycopg2-binary
+# Application source.
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
 
-# Copy the application code
-COPY . .
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Expose port
 EXPOSE 8000
 
-# Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

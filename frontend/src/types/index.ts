@@ -26,25 +26,64 @@ export interface Lead {
   phone?: string;
   status: string;
   source: string;
-  enriched_data?: Record<string, any>;
+  enriched_data?: Record<string, unknown>;
   crm_contact_id?: string;
   crm_account_id?: string;
   created_at: string;
   updated_at: string;
 }
 
-// Agent Execution Types
+export interface LeadCreate {
+  email?: string;
+  name?: string;
+  company?: string;
+  domain?: string;
+  title?: string;
+  linkedin_url?: string;
+  phone?: string;
+  source?: string;
+}
+
+export interface LeadUpdate {
+  email?: string;
+  name?: string;
+  company?: string;
+  domain?: string;
+  title?: string;
+  linkedin_url?: string;
+  phone?: string;
+  status?: string;
+}
+
+// Agent Types — trajectory matches the backend's TrajectoryEntry shape
+export interface TrajectoryEntry {
+  step: string;
+  status: 'started' | 'completed' | 'failed' | 'skipped';
+  started_at?: number;
+  completed_at?: number;
+  duration_ms?: number;
+  details?: Record<string, unknown>;
+  tokens_input?: number;
+  tokens_output?: number;
+  cost_cents?: number;
+  model?: string;
+  error?: string;
+}
+
 export interface AgentExecution {
   id: string;
   tenant_id: string;
   user_id: string;
   lead_id: string;
   agent_type: string;
-  trajectory: string;
+  trajectory: TrajectoryEntry[];
   success: boolean;
   tokens_input: number;
   tokens_output: number;
   cost_cents: number;
+  draft_subject?: string | null;
+  draft_email?: string | null;
+  error?: string | null;
   started_at: string;
   completed_at: string;
   created_at: string;
@@ -52,26 +91,50 @@ export interface AgentExecution {
 }
 
 // Campaign Types
+export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed' | 'deleted';
+
+export interface CampaignStep {
+  order: number;
+  type: 'email' | 'call' | 'task';
+  title: string;
+  content: string;
+  delay_days: number;
+  subject?: string;
+}
+
 export interface Campaign {
   id: string;
   name: string;
   description?: string;
-  status: 'draft' | 'active' | 'paused' | 'completed';
+  status: CampaignStatus;
+  steps: CampaignStep[];
   created_at: string;
   updated_at: string;
   active_leads: number;
   completed_leads: number;
 }
 
+export interface CampaignCreate {
+  name: string;
+  description?: string;
+  steps: CampaignStep[];
+}
+
+export interface CampaignUpdate {
+  name?: string;
+  description?: string;
+  status?: CampaignStatus;
+}
+
 // Tenant Types
 export interface Tenant {
   id: string;
   name: string;
-  subdomain: string;
+  subdomain?: string;
   plan: string;
   status: string;
-  config?: Record<string, any>;
-  limits?: Record<string, any>;
+  config?: Record<string, unknown>;
+  limits?: Record<string, unknown>;
   billing_email?: string;
   is_verified: boolean;
   created_at: string;
@@ -79,15 +142,24 @@ export interface Tenant {
 }
 
 // Usage Metrics Types
-export interface UsageMetrics {
-  id: string;
-  tenant_id: string;
-  user_id?: string;
+export interface UsageMetricsPoint {
   date: string;
-  metric_type: string;
   value: number;
-  cost_cents: number;
-  created_at: string;
+  active_tenants: number;
+  cost: number;
+}
+
+export interface UsageMetrics {
+  date_range: [string, string];
+  granularity: string;
+  metrics: UsageMetricsPoint[];
+  totals: {
+    total_usage: number;
+    total_cost: number;
+    total_tenants: number;
+    total_users: number;
+    total_tasks: number;
+  };
 }
 
 // Auth Types
@@ -105,6 +177,18 @@ export interface RegisterCredentials {
 export interface TokenResponse {
   access_token: string;
   token_type: string;
+}
+
+// Worker tick result
+export interface WorkerTickResult {
+  processed: number;
+  advanced: number;
+  completed: number;
+  failed: number;
+  skipped: number;
+  emails_sent: number;
+  agent_runs: number;
+  errors: string[];
 }
 
 // Common Types

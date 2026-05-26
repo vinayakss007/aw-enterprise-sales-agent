@@ -1,34 +1,50 @@
-from typing import TypedDict, List, Dict, Any, Optional
-from datetime import datetime
-from app.db.models.lead import Lead
+"""Agent state types.
+
+The state is a plain ``TypedDict`` so it round-trips cleanly through JSON
+serialization (we persist parts of it to a JSONB column).
+"""
+from __future__ import annotations
+
+from typing import Any, TypedDict
+
+
+class TrajectoryEntry(TypedDict, total=False):
+    step: str
+    status: str  # "started" | "completed" | "failed" | "skipped"
+    started_at: float
+    completed_at: float
+    duration_ms: int
+    details: dict[str, Any]
+    tokens_input: int
+    tokens_output: int
+    cost_cents: int
+    model: str
+    error: str
+
 
 class AgentState(TypedDict, total=False):
-    """
-    The complete state for the sales agent workflow
-    """
-    # Input parameters
-    lead: Lead
+    # ---- Inputs ----
+    lead: dict[str, Any]  # serialized lead, not the ORM object
     user_id: str
     tenant_id: str
-    agent_type: str  # research, outreach, follow-up
-    
-    # Execution plan
-    plan: List[str]
-    current_step: str
-    step_history: List[Dict[str, Any]]
-    
-    # Working memory
-    research_results: Dict[str, Any]
-    enriched_data: Dict[str, Any]
+    agent_type: str  # research | outreach | follow-up
+
+    # ---- Working memory ----
+    research_results: dict[str, Any]
+    enriched_data: dict[str, Any]
+    knowledge_results: list[dict[str, Any]]
     draft_email: str
-    verification_result: Dict[str, Any]
-    
-    # Execution context
-    trajectory: List[Dict[str, Any]]  # For audit trail
-    tokens_used: int
-    execution_time: float
-    success: bool
-    error: Optional[str]
-    
-    # Cost tracking
+    draft_subject: str
+    verification_result: dict[str, Any]
+
+    # ---- Execution context ----
+    current_step: str
+    trajectory: list[TrajectoryEntry]
+
+    # ---- Aggregates filled in by the orchestrator ----
+    tokens_input: int
+    tokens_output: int
     cost_cents: int
+    execution_time_seconds: float
+    success: bool
+    error: str | None

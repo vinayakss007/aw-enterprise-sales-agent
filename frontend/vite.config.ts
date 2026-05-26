@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -7,22 +8,33 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
-    open: false, // Don't auto-open in development
-    // Enable HMR for better development experience
+    open: false,
     hmr: {
       overlay: true,
+    },
+    proxy: {
+      // Forward API calls to the backend during dev so VITE_API_URL doesn't
+      // need to be set; the rate-limit middleware uses the client IP/header
+      // bucket so this works without CORS.
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
   define: {
     global: 'globalThis',
   },
-  // Handle client-side routing, fallback to index.html
   appType: 'spa',
-  // Explicitly set the root directory
   root: '.',
-  // Explicitly set the index.html entry point
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-  }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
+  },
 })

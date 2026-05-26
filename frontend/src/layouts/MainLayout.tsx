@@ -6,8 +6,7 @@ import {
   ChatBubbleLeftRightIcon, 
   ChartBarIcon, 
   Cog6ToothIcon,
-  UsersIcon,
-  BuildingOfficeIcon
+  BookOpenIcon,
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid, 
@@ -15,8 +14,6 @@ import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid, 
   ChartBarIcon as ChartBarIconSolid, 
   Cog6ToothIcon as Cog6ToothIconSolid,
-  UsersIcon as UsersIconSolid,
-  BuildingOfficeIcon as BuildingOfficeIconSolid
 } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
 import UserMenu from '../components/common/UserMenu';
@@ -26,6 +23,7 @@ const navigation = [
   { name: 'Leads', href: '/leads', icon: UserGroupIcon, current: false },
   { name: 'Agent', href: '/agent', icon: ChatBubbleLeftRightIcon, current: false },
   { name: 'Campaigns', href: '/campaigns', icon: ChartBarIcon, current: false },
+  { name: 'Knowledge', href: '/knowledge', icon: BookOpenIcon, current: false },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon, current: false },
 ];
 

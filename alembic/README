@@ -1,0 +1,14 @@
+Alembic migrations
+==================
+
+Apply migrations:
+
+    alembic upgrade head
+
+Generate a new migration after changing models:
+
+    alembic revision --autogenerate -m "describe the change"
+
+The database URL is read from ``app.core.config.settings.DATABASE_URL`` (which
+in turn reads the ``DATABASE_URL`` environment variable), so you do not need
+to set anything in ``alembic.ini``.

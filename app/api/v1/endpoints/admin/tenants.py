@@ -1,15 +1,16 @@
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
 from sqlalchemy.orm import Session
-from app.db.session import get_db
+
+from app.api.deps import get_current_admin
 from app.db.models.user import User
+from app.db.session import get_db
 from app.schemas.tenant import TenantResponse
 from app.services.admin.tenant_service import TenantService
-from app.api.deps import get_current_admin
 
 router = APIRouter()
 
-@router.get("/", response_model=List[TenantResponse])
+@router.get("/", response_model=list[TenantResponse])
 async def list_tenants(
     skip: int = 0,
     limit: int = 100,

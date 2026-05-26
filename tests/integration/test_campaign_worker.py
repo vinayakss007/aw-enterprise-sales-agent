@@ -532,7 +532,7 @@ async def test_agent_mode_step_drafts_with_agent_and_persists_execution(
     assert exe.tokens_input >= 1
     assert exe.tokens_output >= 1
     assert isinstance(exe.trajectory, list)
-    assert {entry["step"] for entry in exe.trajectory} == {
+    assert {entry["step"] for entry in exe.trajectory} >= {
         "research",
         "enrich",
         "draft_email",

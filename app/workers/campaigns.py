@@ -147,8 +147,16 @@ class CampaignWorker:
     def agent(self) -> SalesAgent:
         if self._agent_override is not None:
             return self._agent_override
-        # Cache so each worker instance shares one agent.
-        self._agent_override = SalesAgent()
+        # Cache so each worker instance shares one agent. Default agent
+        # wires search + knowledge so campaign emails benefit from the same
+        # grounding the customer-side endpoint provides.
+        from app.integrations.search.factory import get_search_provider
+        from app.services.customer.knowledge_service import KnowledgeService
+
+        self._agent_override = SalesAgent(
+            search=get_search_provider(),
+            knowledge=KnowledgeService(self.db),
+        )
         return self._agent_override
 
     # ------------------------------------------------------------------ #

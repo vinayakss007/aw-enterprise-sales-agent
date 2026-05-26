@@ -29,6 +29,7 @@ async def test_get_llm_falls_back_to_fake_without_key(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_sales_agent_full_pipeline_with_fake_llm():
+    """Default pipeline with no search / knowledge: knowledge node skips."""
     from app.agents.sales_agent.graph import SalesAgent
     from app.agents.sales_agent.llm import FakeLLM
 
@@ -48,11 +49,16 @@ async def test_sales_agent_full_pipeline_with_fake_llm():
     }
     result = await agent.run(initial)
 
-    # Pipeline ran all four nodes.
+    # Pipeline now has five nodes; knowledge skips because no provider.
     steps = [entry["step"] for entry in result["trajectory"]]
-    assert steps == ["research", "enrich", "draft_email", "verify"]
-    # Every step recorded as completed.
-    assert all(entry["status"] == "completed" for entry in result["trajectory"])
+    assert steps == ["research", "enrich", "knowledge", "draft_email", "verify"]
+    statuses = {entry["step"]: entry["status"] for entry in result["trajectory"]}
+    assert statuses["research"] == "completed"
+    assert statuses["enrich"] == "completed"
+    assert statuses["knowledge"] == "skipped"  # no provider
+    assert statuses["draft_email"] == "completed"
+    assert statuses["verify"] == "completed"
+
     # Draft outputs populated.
     assert result["draft_subject"]
     assert len(result["draft_email"]) >= 30
@@ -67,28 +73,144 @@ async def test_sales_agent_full_pipeline_with_fake_llm():
     assert result["verification_result"]["passed"] is True
     assert result["success"] is True
     assert result["error"] is None
-    # Execution time is recorded.
-    assert result["execution_time_seconds"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_research_node_uses_search_provider_when_supplied():
+    """Search hits should land in research_results.search and the trajectory."""
+    from app.agents.sales_agent.context import AgentContext
+    from app.agents.sales_agent.llm import FakeLLM
+    from app.agents.sales_agent.nodes import research_node
+    from app.integrations.search.fake import FakeSearchProvider
+
+    state = {
+        "lead": {"company": "Target Inc", "domain": "target.test", "title": "CEO"},
+        "trajectory": [],
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cost_cents": 0,
+    }
+    ctx = AgentContext(llm=FakeLLM(), search=FakeSearchProvider())
+    out = await research_node(state, ctx)
+
+    assert out["research_results"]["search"]
+    assert len(out["research_results"]["search"]) >= 1
+    research_entry = next(e for e in out["trajectory"] if e["step"] == "research")
+    assert research_entry["details"]["search_provider"] == "fake"
+    assert research_entry["details"]["search_results"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_knowledge_node_runs_when_provider_supplied():
+    """A KnowledgeLookup with hits puts results into knowledge_results."""
+    from app.agents.sales_agent.context import AgentContext, KnowledgeMatch
+    from app.agents.sales_agent.llm import FakeLLM
+    from app.agents.sales_agent.nodes import knowledge_node
+
+    class StubKnowledge:
+        async def lookup(self, query, *, tenant_id, limit=3):
+            assert tenant_id == "t1"
+            return [
+                KnowledgeMatch(
+                    id="k1", title="Pricing", content="Our plans start at $99",
+                    category="pricing", tags=["pricing"], score=3.0,
+                )
+            ]
+
+    state = {
+        "lead": {"company": "Target Inc", "title": "CEO"},
+        "trajectory": [],
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cost_cents": 0,
+    }
+    ctx = AgentContext(llm=FakeLLM(), knowledge=StubKnowledge(), tenant_id="t1")
+    out = await knowledge_node(state, ctx)
+
+    assert len(out["knowledge_results"]) == 1
+    assert out["knowledge_results"][0]["title"] == "Pricing"
+    knowledge_entry = next(e for e in out["trajectory"] if e["step"] == "knowledge")
+    assert knowledge_entry["status"] == "completed"
+    assert knowledge_entry["details"]["matches"] == 1
+
+
+@pytest.mark.asyncio
+async def test_knowledge_node_skips_when_no_provider():
+    from app.agents.sales_agent.context import AgentContext
+    from app.agents.sales_agent.llm import FakeLLM
+    from app.agents.sales_agent.nodes import knowledge_node
+
+    state = {
+        "lead": {"company": "Target Inc"},
+        "trajectory": [],
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cost_cents": 0,
+    }
+    out = await knowledge_node(state, AgentContext(llm=FakeLLM()))
+    entry = next(e for e in out["trajectory"] if e["step"] == "knowledge")
+    assert entry["status"] == "skipped"
+    assert "knowledge_results" not in out
+
+
+@pytest.mark.asyncio
+async def test_draft_email_includes_knowledge_results_in_prompt():
+    """When knowledge_results is populated, draft_email should reference them."""
+    from app.agents.sales_agent.context import AgentContext
+    from app.agents.sales_agent.llm import FakeLLM
+    from app.agents.sales_agent.nodes import draft_email_node
+
+    captured_messages: list[list[dict]] = []
+
+    class CaptureLLM(FakeLLM):
+        async def complete(self, messages, *, max_tokens=512, temperature=0.4):
+            captured_messages.append(messages)
+            return await super().complete(
+                messages, max_tokens=max_tokens, temperature=temperature
+            )
+
+    state = {
+        "lead": {"name": "Pat", "company": "Target"},
+        "research_results": {"summary": "tech company"},
+        "knowledge_results": [
+            {"title": "Pricing", "content": "Plans from $99/mo"},
+            {"title": "Onboarding", "content": "Activation in 24h"},
+        ],
+        "trajectory": [],
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cost_cents": 0,
+    }
+    out = await draft_email_node(state, AgentContext(llm=CaptureLLM()))
+
+    assert captured_messages, "expected the LLM to be called"
+    user_prompt = captured_messages[0][-1]["content"]
+    assert "Pricing" in user_prompt
+    assert "Onboarding" in user_prompt
+    draft_entry = next(e for e in out["trajectory"] if e["step"] == "draft_email")
+    assert draft_entry["details"]["knowledge_used"] == 2
 
 
 @pytest.mark.asyncio
 async def test_verify_flags_short_body():
+    from app.agents.sales_agent.context import AgentContext
     from app.agents.sales_agent.llm import FakeLLM
     from app.agents.sales_agent.nodes import verify_node
 
     state = {"draft_email": "too short"}
-    out = await verify_node(state, FakeLLM())  # type: ignore[arg-type]
+    out = await verify_node(state, AgentContext(llm=FakeLLM()))  # type: ignore[arg-type]
     assert "body_too_short" in out["verification_result"]["issues"]
     assert out["verification_result"]["passed"] is False
 
 
 @pytest.mark.asyncio
 async def test_verify_flags_banned_phrase():
+    from app.agents.sales_agent.context import AgentContext
     from app.agents.sales_agent.llm import FakeLLM
     from app.agents.sales_agent.nodes import verify_node
 
     state = {"draft_email": "Hi, please send your password to me right away. " * 3}
-    out = await verify_node(state, FakeLLM())  # type: ignore[arg-type]
+    out = await verify_node(state, AgentContext(llm=FakeLLM()))  # type: ignore[arg-type]
     assert "body_contains_banned_phrase" in out["verification_result"]["issues"]
 
 

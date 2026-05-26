@@ -20,3 +20,4 @@ api_router.include_router(customer.leads.router, prefix="/customer/leads", tags=
 api_router.include_router(customer.agent.router, prefix="/customer/agent", tags=["customer-agent"])
 api_router.include_router(customer.campaigns.router, prefix="/customer/campaigns", tags=["customer-campaigns"])
 api_router.include_router(customer.crm.router, prefix="/customer/crm", tags=["customer-crm"])
+api_router.include_router(customer.knowledge.router, prefix="/customer/knowledge", tags=["customer-knowledge"])

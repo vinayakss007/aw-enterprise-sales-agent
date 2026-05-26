@@ -41,6 +41,7 @@ from app.db.models.campaign import Campaign, CampaignAssignment, CampaignStep
 from app.db.models.lead import Lead
 from app.integrations.email.base import EmailMessage, EmailSender
 from app.integrations.email.factory import get_email_sender
+from app.services.usage_writer import record_usage
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +407,16 @@ class CampaignWorker:
             completed_at=completed_at,
         )
         self.db.add(execution)
+        record_usage(
+            self.db,
+            tenant_id=str(campaign.tenant_id),
+            user_id=str(campaign.created_by),
+            metric_type="campaign_email",
+            value=int(result.get("tokens_input", 0)) + int(result.get("tokens_output", 0)),
+            cost_cents=int(result.get("cost_cents", 0)),
+            resource_id=str(execution.id),
+            commit=False,
+        )
         # Caller commits after advancing the assignment so audit + agent row
         # land in the same transaction.
 

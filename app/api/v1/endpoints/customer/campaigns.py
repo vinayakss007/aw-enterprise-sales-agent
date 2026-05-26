@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.schemas.campaign import CampaignCreate, CampaignResponse, CampaignUpdate
 from app.services.admin.audit_service import AuditService
 from app.services.customer.campaign_service import CampaignService
+from app.services.quota_service import QuotaService
 
 router = APIRouter()
 
@@ -52,6 +53,7 @@ async def create_campaign(
     db: Session = Depends(get_db),
 ):
     """Create a new campaign."""
+    QuotaService(db, current_user).check_campaign_create()
     campaign = await CampaignService(db, current_user).create_campaign(campaign_in)
     _audit(db, current_user, request, "campaign.create", campaign.id, name=campaign.name)
     return campaign

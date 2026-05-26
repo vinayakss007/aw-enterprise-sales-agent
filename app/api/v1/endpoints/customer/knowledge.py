@@ -20,6 +20,7 @@ from app.schemas.knowledge import (
 )
 from app.services.admin.audit_service import AuditService
 from app.services.customer.knowledge_service import KnowledgeService
+from app.services.quota_service import QuotaService
 
 router = APIRouter()
 
@@ -54,6 +55,7 @@ async def create_entry(
     db: Session = Depends(get_db),
 ):
     """Create a new knowledge-base entry."""
+    QuotaService(db, current_user).check_kb_create()
     entry = await KnowledgeService(db, current_user).create_entry(payload)
     AuditService(db).record(
         tenant_id=str(current_user.tenant_id),

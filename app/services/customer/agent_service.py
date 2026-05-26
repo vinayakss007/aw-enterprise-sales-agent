@@ -15,6 +15,7 @@ from app.db.models.user import User
 from app.integrations.search.factory import get_search_provider
 from app.schemas.agent import AgentExecutionResponse
 from app.services.customer.knowledge_service import KnowledgeService
+from app.services.usage_writer import record_usage
 
 
 def _lead_to_dict(lead: Lead) -> dict[str, Any]:
@@ -105,6 +106,16 @@ class AgentService:
         )
         self.db.add(execution)
         self.db.commit()
+        record_usage(
+            self.db,
+            tenant_id=str(self.tenant_id),
+            user_id=str(self.user.id),
+            metric_type="agent_run",
+            value=int(result.get("tokens_input", 0)) + int(result.get("tokens_output", 0)),
+            cost_cents=int(result.get("cost_cents", 0)),
+            resource_id=str(execution.id),
+            commit=False,
+        )
         self.db.refresh(execution)
 
         return self._to_response(

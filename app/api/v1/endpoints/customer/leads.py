@@ -25,7 +25,10 @@ from app.services.customer.lead_import import (
     export_leads_csv,
     import_leads_csv,
 )
+from app.services.customer.lead_scoring import compute_lead_score
 from app.services.customer.lead_service import LeadService
+from app.services.quota_service import QuotaService
+from app.services.usage_writer import record_usage
 
 router = APIRouter()
 
@@ -56,6 +59,7 @@ async def create_lead(
     db: Session = Depends(get_db),
 ):
     """Create a new lead."""
+    QuotaService(db, current_user).check_lead_create()
     lead = await LeadService(db, current_user).create_lead(lead_in)
     AuditService(db).record(
         tenant_id=str(current_user.tenant_id),
@@ -65,6 +69,13 @@ async def create_lead(
         resource_id=lead.id,
         changes_after={"email": lead.email, "company": lead.company},
         **_audit_context(request),
+    )
+    record_usage(
+        db,
+        tenant_id=str(current_user.tenant_id),
+        user_id=str(current_user.id),
+        metric_type="lead_create",
+        commit=False,
     )
     return lead
 
@@ -217,4 +228,39 @@ async def enrich_lead(
         },
         **_audit_context(request),
     )
+    record_usage(
+        db,
+        tenant_id=str(current_user.tenant_id),
+        user_id=str(current_user.id),
+        metric_type="enrichment",
+        resource_id=lead_id,
+        commit=False,
+    )
     return await LeadService(db, current_user).get_lead(lead_id)
+
+
+
+@router.post("/{lead_id}/score")
+async def score_lead(
+    lead_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Compute and store a lead score based on enriched_data."""
+    lead = (
+        db.query(Lead)
+        .filter(Lead.id == lead_id, Lead.tenant_id == current_user.tenant_id)
+        .first()
+    )
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    score = compute_lead_score(lead.enriched_data)
+
+    # Persist score in enriched_data
+    enriched = dict(lead.enriched_data) if lead.enriched_data else {}
+    enriched["lead_score"] = score
+    lead.enriched_data = enriched
+    db.commit()
+
+    return {"lead_id": str(lead.id), "score": score}

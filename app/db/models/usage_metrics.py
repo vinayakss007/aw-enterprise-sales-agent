@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -13,11 +13,12 @@ class UsageMetrics(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    date = Column(Date, nullable=False, index=True)  # Date for aggregation
-    metric_type = Column(String, nullable=False, index=True)  # tokens_in, tokens_out, tasks_completed, etc.
-    value = Column(BigInteger, nullable=False)
-    cost_cents = Column(Integer, default=0)  # Cost in cents
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    metric_type = Column(String, nullable=False, index=True)
+    value = Column(BigInteger, nullable=False, default=1)
+    cost_cents = Column(Integer, default=0)
+    resource_id = Column(String, nullable=True, index=True)  # UUID or other identifier
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

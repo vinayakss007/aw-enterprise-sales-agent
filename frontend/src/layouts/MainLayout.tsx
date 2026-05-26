@@ -6,8 +6,6 @@ import {
   ChatBubbleLeftRightIcon, 
   ChartBarIcon, 
   Cog6ToothIcon,
-  UsersIcon,
-  BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid, 
@@ -15,8 +13,6 @@ import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid, 
   ChartBarIcon as ChartBarIconSolid, 
   Cog6ToothIcon as Cog6ToothIconSolid,
-  UsersIcon as UsersIconSolid,
-  BuildingOfficeIcon as BuildingOfficeIconSolid
 } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
 import UserMenu from '../components/common/UserMenu';

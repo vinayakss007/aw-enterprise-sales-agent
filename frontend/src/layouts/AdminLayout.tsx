@@ -6,7 +6,6 @@ import {
   UsersIcon, 
   ChartBarIcon, 
   Cog6ToothIcon,
-  ArrowLeftOnRectangleIcon
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid, 

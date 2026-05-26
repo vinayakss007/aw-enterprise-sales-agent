@@ -1,9 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, DateTime, Boolean
 from sqlalchemy.orm import relationship
+from app.db.types import JSONB, UUID
 from datetime import datetime
 import uuid
 from app.db.base import Base
+
 
 class Tenant(Base):
     __tablename__ = "tenants"
@@ -13,8 +14,8 @@ class Tenant(Base):
     subdomain = Column(String, unique=True, index=True)
     plan = Column(String, default="free")  # free, pro, enterprise
     status = Column(String, default="active")  # active, suspended, cancelled
-    config = Column(JSONB)  # CRM settings, model preferences, etc.
-    limits = Column(JSONB)  # API limits, usage limits, etc.
+    config = Column(JSONB, default=dict)  # CRM settings, preferences
+    limits = Column(JSONB, default=dict)  # Usage limits
     billing_email = Column(String)
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -22,10 +23,6 @@ class Tenant(Base):
 
     # Relationships
     users = relationship("User", back_populates="tenant")
-    leads = relationship("Lead", back_populates="tenant")
-    agent_executions = relationship("AgentExecution", back_populates="tenant")
-    usage_metrics = relationship("UsageMetrics", back_populates="tenant")
-    audit_logs = relationship("AuditLog", back_populates="tenant")
 
     def __repr__(self):
-        return f"<Tenant(id={self.id}, name={self.name}, subdomain={self.subdomain})>"
+        return f"<Tenant(id={self.id}, name={self.name})>"

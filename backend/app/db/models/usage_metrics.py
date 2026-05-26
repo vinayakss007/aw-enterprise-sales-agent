@@ -1,24 +1,21 @@
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Date, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey
 from datetime import datetime, date
 import uuid
 from app.db.base import Base
+from app.db.types import UUID
+
 
 class UsageMetrics(Base):
     __tablename__ = "usage_metrics"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    date = Column(Date, nullable=False, index=True)  # Date for aggregation
-    metric_type = Column(String, nullable=False, index=True)  # tokens_in, tokens_out, tasks_completed, etc.
-    value = Column(BigInteger, nullable=False)
-    cost_cents = Column(Integer, default=0)  # Cost in cents
+    date = Column(Date, default=date.today, index=True)
+    api_calls = Column(Integer, default=0)
+    agent_executions = Column(Integer, default=0)
+    tokens_used = Column(Integer, default=0)
+    leads_created = Column(Integer, default=0)
+    emails_sent = Column(Integer, default=0)
+    cost_cents = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    tenant = relationship("Tenant", back_populates="usage_metrics")
-
-    def __repr__(self):
-        return f"<UsageMetrics(id={self.id}, tenant_id={self.tenant_id}, metric_type={self.metric_type}, value={self.value})>"
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

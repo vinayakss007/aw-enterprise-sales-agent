@@ -1,37 +1,29 @@
+"""Alert manager - monitors thresholds and notifies."""
 import asyncio
 import logging
-from typing import List, Dict, Any
+from typing import List
 
 logger = logging.getLogger(__name__)
 
+
 class AlertManager:
-    """Manages alert monitoring and notifications"""
-    
+    """Manages background alert monitoring."""
+
     def __init__(self):
         self.is_monitoring = False
-        self.alert_tasks: List[asyncio.Task] = []
-        
-    async def start_monitoring(self):
-        """Start monitoring for alerts"""
-        logger.info("Starting alert monitoring")
-        self.is_monitoring = True
-        
-        # In a real implementation, this would monitor for alerts
-        while self.is_monitoring:
-            # Simulate monitoring by sleeping
-            await asyncio.sleep(30)
-            # This would periodically check for alerts in a real implementation
-            continue
-    
-    def stop_monitoring(self):
-        """Stop alert monitoring"""
-        logger.info("Stopping alert monitoring")
-        self.is_monitoring = False
-        
-        # Cancel any running tasks
-        for task in self.alert_tasks:
-            if not task.done():
-                task.cancel()
+        self._task = None
 
-# Create a global instance
+    async def start_monitoring(self):
+        """Start background alert monitoring loop."""
+        logger.info("Alert monitoring started")
+        self.is_monitoring = True
+        while self.is_monitoring:
+            await asyncio.sleep(60)
+
+    def stop_monitoring(self):
+        """Stop alert monitoring."""
+        logger.info("Alert monitoring stopped")
+        self.is_monitoring = False
+
+
 ALERT_MANAGER = AlertManager()

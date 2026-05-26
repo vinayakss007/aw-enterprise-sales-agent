@@ -1,165 +1,59 @@
-from datetime import datetime, timedelta
+"""Usage metrics service."""
 from typing import List, Optional, Dict, Any
-from sqlalchemy import func, and_, text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+from datetime import date, timedelta
 from app.db.models.usage_metrics import UsageMetrics
-from app.db.models.tenant import Tenant
-from app.db.models.user import User
-from app.schemas.usage import UsageMetricsResponse, TenantUsageResponse
+
 
 class UsageService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_system_metrics(
-        self, 
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
-        granularity: str = "day"
-    ) -> UsageMetricsResponse:
-        """
-        Get system-wide usage metrics
-        """
-        from datetime import datetime
-        start_dt = datetime.fromisoformat(start_date) if start_date else datetime.utcnow() - timedelta(days=30)
-        end_dt = datetime.fromisoformat(end_date) if end_date else datetime.utcnow()
-
-        # Query for system metrics
-        query = self.db.query(
-            func.date_trunc(granularity, UsageMetrics.timestamp).label('date'),
-            func.sum(UsageMetrics.value).label('total_value'),
-            func.count(func.distinct(UsageMetrics.tenant_id)).label('active_tenants'),
-            func.sum(UsageMetrics.cost_cents).label('total_cost')
-        ).filter(
-            and_(
-                UsageMetrics.timestamp >= start_dt,
-                UsageMetrics.timestamp <= end_dt
+    def get_usage_summary(self, tenant_id: str, days: int = 30) -> Dict[str, Any]:
+        """Get aggregated usage for a tenant over the last N days."""
+        start_date = date.today() - timedelta(days=days)
+        rows = (
+            self.db.query(UsageMetrics)
+            .filter(
+                UsageMetrics.tenant_id == tenant_id,
+                UsageMetrics.date >= start_date,
             )
-        ).group_by(
-            func.date_trunc(granularity, UsageMetrics.timestamp)
-        ).order_by(
-            func.date_trunc(granularity, UsageMetrics.timestamp)
+            .all()
         )
 
-        results = query.all()
-        
-        return UsageMetricsResponse(
-            date_range=(start_dt, end_dt),
-            granularity=granularity,
-            metrics=[{
-                'date': result.date.isoformat(),
-                'value': result.total_value or 0,
-                'active_tenants': result.active_tenants or 0,
-                'cost': (result.total_cost or 0) / 100.0  # Convert cents to dollars
-            } for result in results],
-            totals=self._get_totals(start_dt, end_dt)
-        )
+        return {
+            "tenant_id": tenant_id,
+            "period_days": days,
+            "total_api_calls": sum(r.api_calls for r in rows),
+            "total_agent_executions": sum(r.agent_executions for r in rows),
+            "total_tokens_used": sum(r.tokens_used for r in rows),
+            "total_leads_created": sum(r.leads_created for r in rows),
+            "total_emails_sent": sum(r.emails_sent for r in rows),
+            "total_cost_cents": sum(r.cost_cents for r in rows),
+        }
 
-    async def get_tenant_usage(
-        self, 
-        start_date: Optional[str], 
-        end_date: Optional[str], 
-        limit: int, 
-        offset: int, 
-        sort_by: str, 
-        sort_order: str
-    ) -> List[TenantUsageResponse]:
-        """
-        Get tenant usage with pagination
-        """
-        from datetime import datetime
-        start_dt = datetime.fromisoformat(start_date) if start_date else datetime.utcnow() - timedelta(days=30)
-        end_dt = datetime.fromisoformat(end_date) if end_date else datetime.utcnow()
-
-        # Query tenant usage with aggregation
-        query = self.db.query(
-            Tenant.id,
-            Tenant.name,
-            func.sum(UsageMetrics.value).label('total_usage'),
-            func.sum(UsageMetrics.cost_cents).label('total_cost'),
-            func.count(func.distinct(UsageMetrics.user_id)).label('active_users'),
-            func.count(UsageMetrics.id).label('task_count')
-        ).join(
-            UsageMetrics, Tenant.id == UsageMetrics.tenant_id
-        ).filter(
-            and_(
-                UsageMetrics.timestamp >= start_dt,
-                UsageMetrics.timestamp <= end_dt
+    def get_daily_usage(self, tenant_id: str, days: int = 30) -> List[Dict[str, Any]]:
+        """Get daily usage breakdown."""
+        start_date = date.today() - timedelta(days=days)
+        rows = (
+            self.db.query(UsageMetrics)
+            .filter(
+                UsageMetrics.tenant_id == tenant_id,
+                UsageMetrics.date >= start_date,
             )
-        ).group_by(
-            Tenant.id, Tenant.name
+            .order_by(UsageMetrics.date.desc())
+            .all()
         )
-
-        # Apply sorting
-        if sort_order == "desc":
-            sort_func = lambda x: x.desc()
-        else:
-            sort_func = lambda x: x.asc()
-
-        if sort_by == "usage":
-            query = query.order_by(sort_func(func.sum(UsageMetrics.value)))
-        elif sort_by == "cost":
-            query = query.order_by(sort_func(func.sum(UsageMetrics.cost_cents)))
-        elif sort_by == "users":
-            query = query.order_by(sort_func(func.count(func.distinct(UsageMetrics.user_id))))
-        else:  # tasks
-            query = query.order_by(sort_func(func.count(UsageMetrics.id)))
-
-        # Apply pagination
-        results = query.offset(offset).limit(limit).all()
-        
         return [
-            TenantUsageResponse(
-                tenant_id=result.id,
-                tenant_name=result.name,
-                total_usage=result.total_usage or 0,
-                total_cost=(result.total_cost or 0) / 100.0,
-                active_users=result.active_users or 0,
-                task_count=result.task_count or 0
-            ) for result in results
+            {
+                "date": str(r.date),
+                "api_calls": r.api_calls,
+                "agent_executions": r.agent_executions,
+                "tokens_used": r.tokens_used,
+                "leads_created": r.leads_created,
+                "emails_sent": r.emails_sent,
+                "cost_cents": r.cost_cents,
+            }
+            for r in rows
         ]
-
-    def _get_totals(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
-        """
-        Get aggregated totals for the date range
-        """
-        from sqlalchemy import func
-        totals_query = self.db.query(
-            func.sum(UsageMetrics.value).label('total_usage'),
-            func.sum(UsageMetrics.cost_cents).label('total_cost'),
-            func.count(func.distinct(UsageMetrics.tenant_id)).label('total_tenants'),
-            func.count(func.distinct(UsageMetrics.user_id)).label('total_users'),
-            func.count(UsageMetrics.id).label('total_tasks')
-        ).filter(
-            and_(
-                UsageMetrics.timestamp >= start_date,
-                UsageMetrics.timestamp <= end_date
-            )
-        )
-
-        result = totals_query.first()
-        return {
-            'total_usage': result.total_usage or 0,
-            'total_cost': (result.total_cost or 0) / 100.0,
-            'total_tenants': result.total_tenants or 0,
-            'total_users': result.total_users or 0,
-            'total_tasks': result.total_tasks or 0
-        }
-        
-    async def export_report(
-        self, 
-        start_date: str, 
-        end_date: str, 
-        report_type: str = "csv"
-    ) -> Dict[str, Any]:
-        """
-        Export usage report in specified format
-        """
-        # This would implement the export logic
-        # For now, return a mock response
-        return {
-            "filename": f"usage_report_{start_date}_{end_date}.{report_type}",
-            "download_url": f"/api/v1/admin/usage/export/download/{report_type}?start={start_date}&end={end_date}",
-            "size": 102400,  # 100KB
-            "created_at": datetime.utcnow()
-        }

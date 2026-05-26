@@ -1,115 +1,48 @@
+"""User administration service."""
 from typing import List, Optional
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.db.models.user import User
-from app.db.models.tenant import Tenant
-from app.schemas.user import UserResponse, UserUpdate
-from app.core.security import get_password_hash
+
 
 class UserService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_all_users(self, skip: int = 0, limit: int = 50) -> List[UserResponse]:
-        """
-        Get all users across all tenants
-        """
-        users = self.db.query(User).offset(skip).limit(limit).all()
-        
-        return [
-            UserResponse(
-                id=str(user.id),
-                email=user.email,
-                name=user.name,
-                role=user.role,
-                tenant_id=str(user.tenant_id),
-                is_active=user.is_active,
-                is_verified=user.is_verified,
-                last_login_at=user.last_login_at,
-                created_at=user.created_at,
-                updated_at=user.updated_at
-            )
-            for user in users
-        ]
+    def get_users(self, tenant_id: str = None, skip: int = 0, limit: int = 50) -> List[User]:
+        query = self.db.query(User)
+        if tenant_id:
+            query = query.filter(User.tenant_id == tenant_id)
+        return query.offset(skip).limit(limit).all()
 
-    async def get_user(self, user_id: str) -> Optional[UserResponse]:
-        """
-        Get a specific user by ID
-        """
-        user = self.db.query(User).filter(User.id == user_id).first()
-        
-        if not user:
-            return None
-            
-        return UserResponse(
-            id=str(user.id),
-            email=user.email,
-            name=user.name,
-            role=user.role,
-            tenant_id=str(user.tenant_id),
-            is_active=user.is_active,
-            is_verified=user.is_verified,
-            last_login_at=user.last_login_at,
-            created_at=user.created_at,
-            updated_at=user.updated_at
-        )
+    def get_user(self, user_id: str) -> Optional[User]:
+        return self.db.query(User).filter(User.id == user_id).first()
 
-    async def update_user(self, user_id: str, user_in: UserUpdate) -> Optional[UserResponse]:
-        """
-        Update user information
-        """
-        user = self.db.query(User).filter(User.id == user_id).first()
-        
-        if not user:
-            return None
-
-        # Update allowed fields
-        update_data = user_in.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(user, field, value)
-
-        user.updated_at = datetime.utcnow()
-        self.db.commit()
-        self.db.refresh(user)
-
-        return UserResponse(
-            id=str(user.id),
-            email=user.email,
-            name=user.name,
-            role=user.role,
-            tenant_id=str(user.tenant_id),
-            is_active=user.is_active,
-            is_verified=user.is_verified,
-            last_login_at=user.last_login_at,
-            created_at=user.created_at,
-            updated_at=user.updated_at
-        )
-
-    async def update_user_role(self, user_id: str, role: str) -> bool:
-        """
-        Update user role
-        """
-        user = self.db.query(User).filter(User.id == user_id).first()
-        
+    def deactivate_user(self, user_id: str) -> bool:
+        user = self.get_user(user_id)
         if not user:
             return False
-
-        user.role = role
+        user.is_active = False
         user.updated_at = datetime.utcnow()
         self.db.commit()
         return True
 
-    async def delete_user(self, user_id: str) -> bool:
-        """
-        Delete user (soft delete by deactivation)
-        """
-        user = self.db.query(User).filter(User.id == user_id).first()
-        
+    def activate_user(self, user_id: str) -> bool:
+        user = self.get_user(user_id)
         if not user:
             return False
+        user.is_active = True
+        user.updated_at = datetime.utcnow()
+        self.db.commit()
+        return True
 
-        user.is_active = False
+    def update_role(self, user_id: str, role: str) -> bool:
+        user = self.get_user(user_id)
+        if not user:
+            return False
+        if role not in ("owner", "admin", "user", "viewer"):
+            return False
+        user.role = role
         user.updated_at = datetime.utcnow()
         self.db.commit()
         return True

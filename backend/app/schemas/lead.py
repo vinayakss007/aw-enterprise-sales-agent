@@ -1,6 +1,8 @@
+"""Lead schemas."""
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
+
 
 class LeadBase(BaseModel):
     email: Optional[EmailStr] = None
@@ -10,10 +12,12 @@ class LeadBase(BaseModel):
     title: Optional[str] = None
     linkedin_url: Optional[str] = None
     phone: Optional[str] = None
-    source: Optional[str] = "agent"
+    source: Optional[str] = "manual"
+
 
 class LeadCreate(LeadBase):
     pass
+
 
 class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -24,6 +28,7 @@ class LeadUpdate(BaseModel):
     linkedin_url: Optional[str] = None
     phone: Optional[str] = None
     status: Optional[str] = None
+
 
 class LeadResponse(LeadBase):
     id: str

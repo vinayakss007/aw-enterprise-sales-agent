@@ -1,31 +1,24 @@
+"""Structured JSON logging setup."""
 import logging
 import sys
 from pythonjsonlogger import jsonlogger
 
-def setup_logging():
-    """
-    Set up JSON logging for the application
-    """
-    # Configure root logger
+
+def setup_logging(level: str = "INFO"):
+    """Configure JSON structured logging for the application."""
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    
-    # Create JSON formatter
+    root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+
     json_formatter = jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s'
+        "%(asctime)s %(name)s %(levelname)s %(message)s"
     )
-    
-    # Create handler for stdout
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(json_formatter)
-    
-    # Clear existing handlers and add our JSON handler
+
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
-    
-    # Set specific log levels for various modules
+
+    # Quieten noisy loggers
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
-    logging.getLogger("opentelemetry").setLevel(logging.WARNING)
-    
-    print("Logging setup complete")
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)

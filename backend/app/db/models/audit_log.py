@@ -1,32 +1,20 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, Text, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, DateTime, ForeignKey
+from app.db.types import JSONB, UUID
 from datetime import datetime
 import uuid
 from app.db.base import Base
 
+
 class AuditLog(Base):
-    __tablename__ = "audit_log"
+    __tablename__ = "audit_logs"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # nullable for system actions
-    action = Column(String, nullable=False, index=True)  # create, update, delete, login, etc.
-    resource_type = Column(String, nullable=False, index=True)  # user, lead, agent, etc.
-    resource_id = Column(String, nullable=False, index=True)  # UUID or other identifier
-    changes_before = Column(JSONB)  # State before change
-    changes_after = Column(JSONB)  # State after change
-    ip_address = Column(String, index=True)
-    user_agent = Column(Text)
-    previous_hash = Column(String(64))  # For tamper resistance
-    current_hash = Column(String(64), index=True)  # For tamper resistance
-
-    # Relationships
-    tenant = relationship("Tenant", back_populates="audit_logs")
-
-    def __repr__(self):
-        return f"<AuditLog(id={self.id}, action={self.action}, resource_type={self.resource_type})>"
-
-# Create composite index for efficient querying
-Index('idx_audit_log_tenant_timestamp', AuditLog.tenant_id, AuditLog.timestamp.desc())
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)  # create, update, delete, execute
+    resource_type = Column(String, nullable=False)  # lead, campaign, agent, user
+    resource_id = Column(String)
+    details = Column(JSONB, default=dict)
+    ip_address = Column(String)
+    user_agent = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)

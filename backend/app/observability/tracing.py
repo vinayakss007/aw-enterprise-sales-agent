@@ -1,90 +1,60 @@
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+"""
+Tracing module with graceful degradation.
+If OpenTelemetry is not installed, provides no-op implementations.
+"""
+import logging
 import os
 
-# Initialize tracer provider
-provider = TracerProvider()
-trace.set_tracer_provider(provider)
+logger = logging.getLogger(__name__)
 
-# Configure OTLP exporter
-otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-otlp_headers = os.getenv("OTEL_EXPORTER_OTLP_HEADERS", "")
+_OTEL_AVAILABLE = False
 
-if otlp_headers:
-    headers = dict(item.split("=") for item in otlp_headers.split(","))
-    span_exporter = OTLPSpanExporter(
-        endpoint=otlp_endpoint,
-        headers=headers
-    )
-else:
-    span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
+try:
+    if os.getenv("ENABLE_OTEL", "false").lower() == "true":
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-# Add span processor
-span_processor = BatchSpanProcessor(span_exporter)
-provider.add_span_processor(span_processor)
+        provider = TracerProvider()
+        trace.set_tracer_provider(provider)
 
-# Initialize tracer
-tracer = trace.get_tracer(__name__)
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+        span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
+        span_processor = BatchSpanProcessor(span_exporter)
+        provider.add_span_processor(span_processor)
+
+        tracer = trace.get_tracer(__name__)
+        _OTEL_AVAILABLE = True
+        logger.info("OpenTelemetry tracing initialized")
+    else:
+        raise ImportError("OTEL disabled by config")
+except (ImportError, Exception) as e:
+    logger.info(f"OpenTelemetry not available, using no-op tracing: {e}")
+
+    class _NoOpSpan:
+        def set_attribute(self, key, value):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    class _NoOpTracer:
+        def start_as_current_span(self, name, **kwargs):
+            return _NoOpSpan()
+
+    tracer = _NoOpTracer()
+
 
 def instrument_app(app):
-    """Instrument the FastAPI application for tracing"""
-    FastAPIInstrumentor.instrument_app(app)
-    HTTPXClientInstrumentor().instrument()
-    SQLAlchemyInstrumentor().instrument()
-    RequestsInstrumentor().instrument()
-    
-    # OpenAI instrumentation if available
-    try:
-        OpenAIInstrumentor().instrument()
-    except ImportError:
-        # OpenAI may not be installed or available
-        pass
-    except Exception as e:
-        # Log any other instrumentation errors
-        import logging
-        logging.warning(f"Failed to instrument OpenAI: {str(e)}")
-
-def trace_agent_execution(agent_type: str, tenant_id: str, lead_id: str):
-    """Decorator to trace agent execution"""
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            with tracer.start_as_current_span(f"agent_execution_{agent_type}") as span:
-                span.set_attribute("agent.type", agent_type)
-                span.set_attribute("tenant.id", tenant_id)
-                span.set_attribute("lead.id", lead_id)
-                
-                try:
-                    result = await func(*args, **kwargs)
-                    span.set_attribute("execution.success", True)
-                    return result
-                except Exception as e:
-                    span.set_attribute("execution.success", False)
-                    span.set_attribute("execution.error", str(e))
-                    raise
-        return wrapper
-    return decorator
-
-def trace_step(step_name: str):
-    """Decorator to trace individual agent steps"""
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            with tracer.start_as_current_span(f"agent_step_{step_name}") as span:
-                span.set_attribute("step.name", step_name)
-                
-                try:
-                    result = await func(*args, **kwargs)
-                    span.set_attribute("step.success", True)
-                    return result
-                except Exception as e:
-                    span.set_attribute("step.success", False)
-                    span.set_attribute("step.error", str(e))
-                    raise
-        return wrapper
-    return decorator
+    """Instrument the FastAPI application for tracing (no-op if OTEL unavailable)"""
+    if _OTEL_AVAILABLE:
+        try:
+            from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+            FastAPIInstrumentor.instrument_app(app)
+        except Exception as e:
+            logger.warning(f"Failed to instrument app: {e}")

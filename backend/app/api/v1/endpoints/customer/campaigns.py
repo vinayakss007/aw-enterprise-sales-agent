@@ -1,3 +1,4 @@
+"""Campaign management endpoints."""
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from sqlalchemy.orm import Session
@@ -9,119 +10,97 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
+
 @router.get("/", response_model=List[CampaignResponse])
 async def list_campaigns(
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    List campaigns for the current user's tenant
-    """
-    campaign_service = CampaignService(db, current_user)
-    campaigns = await campaign_service.get_campaigns(skip=skip, limit=limit)
-    return campaigns
+    service = CampaignService(db, current_user)
+    return await service.get_campaigns(skip=skip, limit=limit)
+
 
 @router.post("/", response_model=CampaignResponse)
 async def create_campaign(
     campaign_in: CampaignCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Create a new campaign
-    """
-    campaign_service = CampaignService(db, current_user)
-    campaign = await campaign_service.create_campaign(campaign_in)
-    return campaign
+    service = CampaignService(db, current_user)
+    return await service.create_campaign(campaign_in)
+
 
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(
     campaign_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Get campaign by ID
-    """
-    campaign_service = CampaignService(db, current_user)
-    campaign = await campaign_service.get_campaign(campaign_id)
+    service = CampaignService(db, current_user)
+    campaign = await service.get_campaign(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return campaign
+
 
 @router.put("/{campaign_id}", response_model=CampaignResponse)
 async def update_campaign(
     campaign_id: str,
     campaign_in: CampaignUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Update campaign
-    """
-    campaign_service = CampaignService(db, current_user)
-    campaign = await campaign_service.update_campaign(campaign_id, campaign_in)
+    service = CampaignService(db, current_user)
+    campaign = await service.update_campaign(campaign_id, campaign_in)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return campaign
+
 
 @router.delete("/{campaign_id}")
 async def delete_campaign(
     campaign_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Delete campaign
-    """
-    campaign_service = CampaignService(db, current_user)
-    success = await campaign_service.delete_campaign(campaign_id)
-    if not success:
+    service = CampaignService(db, current_user)
+    if not await service.delete_campaign(campaign_id):
         raise HTTPException(status_code=404, detail="Campaign not found")
-    return {"message": "Campaign deleted successfully"}
+    return {"message": "Campaign deleted"}
+
 
 @router.post("/{campaign_id}/activate")
 async def activate_campaign(
     campaign_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Activate a campaign
-    """
-    campaign_service = CampaignService(db, current_user)
-    success = await campaign_service.activate_campaign(campaign_id)
-    if not success:
+    service = CampaignService(db, current_user)
+    if not await service.activate_campaign(campaign_id):
         raise HTTPException(status_code=404, detail="Campaign not found")
-    return {"message": "Campaign activated successfully"}
+    return {"message": "Campaign activated"}
+
 
 @router.post("/{campaign_id}/deactivate")
 async def deactivate_campaign(
     campaign_id: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Deactivate a campaign
-    """
-    campaign_service = CampaignService(db, current_user)
-    success = await campaign_service.deactivate_campaign(campaign_id)
-    if not success:
+    service = CampaignService(db, current_user)
+    if not await service.deactivate_campaign(campaign_id):
         raise HTTPException(status_code=404, detail="Campaign not found")
-    return {"message": "Campaign deactivated successfully"}
+    return {"message": "Campaign paused"}
+
 
 @router.post("/{campaign_id}/add-leads")
 async def add_leads_to_campaign(
     campaign_id: str,
     lead_ids: List[str],
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Add leads to a campaign
-    """
-    campaign_service = CampaignService(db, current_user)
-    result = await campaign_service.add_leads_to_campaign(campaign_id, lead_ids)
-    return result
+    service = CampaignService(db, current_user)
+    return await service.add_leads_to_campaign(campaign_id, lead_ids)

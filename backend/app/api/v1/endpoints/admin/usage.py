@@ -1,56 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Optional
-from datetime import datetime, timedelta
+"""Admin usage metrics endpoints."""
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models.user import User
-from app.schemas.usage import UsageMetricsResponse, TenantUsageResponse
-from app.services.admin.usage_service import UsageService
 from app.api.deps import get_current_admin
+from app.services.admin.usage_service import UsageService
 
 router = APIRouter()
 
-@router.get("/", response_model=List[TenantUsageResponse])
-async def get_tenant_usage(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    limit: int = Query(50, le=1000),
-    offset: int = Query(0),
-    sort_by: str = Query("usage", regex="^(usage|cost|users|tasks)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
-    current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    Get tenant usage metrics with pagination (admin only)
-    """
-    usage_service = UsageService(db)
-    return await usage_service.get_tenant_usage(start_date, end_date, limit, offset, sort_by, sort_order)
 
-@router.get("/export")
-async def export_usage_report(
-    start_date: str,
-    end_date: str,
-    report_type: str = Query("csv", regex="^(csv|excel|pdf)$"),
+@router.get("/{tenant_id}/summary")
+async def get_usage_summary(
+    tenant_id: str,
+    days: int = 30,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Export usage data in different formats (admin only)
-    """
-    usage_service = UsageService(db)
-    return await usage_service.export_report(start_date, end_date, report_type)
+    service = UsageService(db)
+    return service.get_usage_summary(tenant_id, days=days)
 
-@router.get("/metrics", response_model=UsageMetricsResponse)
-async def get_system_usage(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    granularity: str = Query("day", regex="^(hour|day|week|month)$"),
+
+@router.get("/{tenant_id}/daily")
+async def get_daily_usage(
+    tenant_id: str,
+    days: int = 30,
     current_user: User = Depends(get_current_admin),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """
-    Get system-wide usage metrics (admin only)
-    """
-    usage_service = UsageService(db)
-    return await usage_service.get_system_metrics(start_date, end_date, granularity)
+    service = UsageService(db)
+    return {"daily": service.get_daily_usage(tenant_id, days=days)}

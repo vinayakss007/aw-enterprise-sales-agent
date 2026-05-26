@@ -16,6 +16,14 @@ export interface ImportReport {
   errors: { row: number; error: string }[];
 }
 
+export interface LeadActivity {
+  id: string;
+  type: string;
+  timestamp: string;
+  summary: string;
+  details?: Record<string, unknown>;
+}
+
 export const leadService = {
   async list(params?: { skip?: number; limit?: number }): Promise<Lead[]> {
     const response = await api.get<Lead[]>('/customer/leads/', { params });
@@ -44,6 +52,16 @@ export const leadService = {
 
   async enrich(leadId: string): Promise<Lead> {
     const response = await api.post<Lead>(`/customer/leads/${leadId}/enrich`);
+    return response.data;
+  },
+
+  async score(leadId: string): Promise<Lead> {
+    const response = await api.post<Lead>(`/customer/leads/${leadId}/score`);
+    return response.data;
+  },
+
+  async getActivity(leadId: string): Promise<LeadActivity[]> {
+    const response = await api.get<LeadActivity[]>(`/customer/leads/${leadId}/activity`);
     return response.data;
   },
 

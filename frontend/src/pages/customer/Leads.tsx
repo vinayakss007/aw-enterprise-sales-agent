@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
@@ -13,6 +14,7 @@ import {
 
 import { Modal } from '../../components/ui/Modal';
 import { useToast } from '../../contexts/ToastContext';
+import { usePagination } from '../../hooks/usePagination';
 import leadService, { ImportReport } from '../../services/leadService';
 import type { Lead, LeadCreate, LeadUpdate } from '../../types';
 
@@ -84,10 +86,11 @@ const LeadsPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { page, setPage, limit, skip, hasNext } = usePagination(20);
 
   const leadsQuery = useQuery<Lead[]>({
-    queryKey: ['leads', 'all'],
-    queryFn: () => leadService.list({ limit: 200 }),
+    queryKey: ['leads', 'all', skip, limit],
+    queryFn: () => leadService.list({ skip, limit }),
   });
 
   const filteredLeads = useMemo(() => {
@@ -366,10 +369,12 @@ const LeadsPage: React.FC = () => {
                 return (
                   <tr key={lead.id} className="hover:bg-gray-50">
                     <td className="py-4 pl-4 pr-3 text-sm">
-                      <div className="font-medium text-gray-900">
-                        {lead.name || '(no name)'}
-                      </div>
-                      <div className="text-gray-500">{lead.domain}</div>
+                      <Link to={`/leads/${lead.id}`} className="block">
+                        <div className="font-medium text-gray-900 hover:text-indigo-600">
+                          {lead.name || '(no name)'}
+                        </div>
+                        <div className="text-gray-500">{lead.domain}</div>
+                      </Link>
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-700">{lead.company}</td>
                     <td className="px-3 py-4 text-sm text-gray-700">{lead.title}</td>
@@ -434,6 +439,54 @@ const LeadsPage: React.FC = () => {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Pagination controls */}
+      <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 rounded-b-lg">
+        <div className="flex flex-1 justify-between sm:hidden">
+          <button
+            type="button"
+            onClick={() => setPage(Math.max(0, page - 1))}
+            disabled={page === 0}
+            className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage(page + 1)}
+            disabled={!hasNext(leadsQuery.data?.length ?? 0)}
+            className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+          <p className="text-sm text-gray-700">
+            Page <span className="font-medium">{page + 1}</span>
+          </p>
+          <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm">
+            <button
+              type="button"
+              onClick={() => setPage(Math.max(0, page - 1))}
+              disabled={page === 0}
+              className="relative inline-flex items-center rounded-l-md px-3 py-2 text-sm font-medium text-gray-700 border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 border-t border-b border-gray-300 bg-white">
+              {page + 1}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage(page + 1)}
+              disabled={!hasNext(leadsQuery.data?.length ?? 0)}
+              className="relative inline-flex items-center rounded-r-md px-3 py-2 text-sm font-medium text-gray-700 border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </nav>
+        </div>
       </div>
 
       {/* Create modal */}

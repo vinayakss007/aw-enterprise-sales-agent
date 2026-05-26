@@ -13,11 +13,14 @@ import AdminLayout from './layouts/AdminLayout';
 import HomePage from './pages/common/Home';
 import LoginPage from './pages/auth/Login';
 import RegisterPage from './pages/auth/Register';
+import ForgotPasswordPage from './pages/auth/ForgotPassword';
+import ResetPasswordPage from './pages/auth/ResetPassword';
 import NotFoundPage from './pages/common/NotFound';
 
 // Customer Pages
 import CustomerDashboard from './pages/customer/Dashboard';
 import LeadsPage from './pages/customer/Leads';
+import LeadDetailPage from './pages/customer/LeadDetail';
 import AgentPage from './pages/customer/Agent';
 import CampaignsPage from './pages/customer/Campaigns';
 import KnowledgePage from './pages/customer/Knowledge';
@@ -30,10 +33,15 @@ import UsagePage from './pages/admin/Usage';
 import AuditPage from './pages/admin/Audit';
 import SettingsPage from './pages/admin/Settings';
 
+// Superadmin Pages
+import SuperadminOverviewPage from './pages/superadmin/Overview';
+
 // Components
 import LoadingSpinner from './components/common/LoadingSpinner';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AdminRoute from './components/common/AdminRoute';
+import SuperadminRoute from './components/common/SuperadminRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Styles
 import './styles/globals.css';
@@ -67,11 +75,13 @@ const AppContent = () => {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 dark:text-gray-100">
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Customer routes */}
           <Route
@@ -98,6 +108,16 @@ const AppContent = () => {
               <ProtectedRoute>
                 <MainLayout>
                   <LeadsPage />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leads/:leadId"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <LeadDetailPage />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -195,6 +215,18 @@ const AppContent = () => {
             }
           />
 
+          {/* Superadmin routes */}
+          <Route
+            path="/superadmin"
+            element={
+              <SuperadminRoute>
+                <MainLayout>
+                  <SuperadminOverviewPage />
+                </MainLayout>
+              </SuperadminRoute>
+            }
+          />
+
           {/* 404 Route */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
@@ -210,7 +242,9 @@ function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <AppContent />
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

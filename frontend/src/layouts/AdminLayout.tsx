@@ -6,14 +6,14 @@ import {
   UsersIcon, 
   ChartBarIcon, 
   Cog6ToothIcon,
-  ArrowLeftOnRectangleIcon
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid, 
   BuildingOfficeIcon as BuildingOfficeIconSolid, 
   UsersIcon as UsersIconSolid, 
   ChartBarIcon as ChartBarIconSolid, 
-  Cog6ToothIcon as Cog6ToothIconSolid
+  Cog6ToothIcon as Cog6ToothIconSolid,
 } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
 import UserMenu from '../components/common/UserMenu';
@@ -23,6 +23,7 @@ const adminNavigation = [
   { name: 'Tenants', href: '/admin/tenants', icon: BuildingOfficeIcon, current: false },
   { name: 'Users', href: '/admin/users', icon: UsersIcon, current: false },
   { name: 'Usage', href: '/admin/usage', icon: ChartBarIcon, current: false },
+  { name: 'Audit', href: '/admin/audit', icon: ShieldCheckIcon, current: false },
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon, current: false },
 ];
 

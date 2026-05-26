@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Dict, Any
+from typing import Any
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.db.models.user import User
+
 from app.api.deps import get_current_admin
+from app.db.models.user import User
+from app.db.session import get_db
 
 router = APIRouter()
 
 @router.post("/config/{tenant_id}")
 async def set_crm_config(
     tenant_id: str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.session import get_db
+
+from app.api.deps import get_current_user
 from app.db.models.user import User
+from app.db.session import get_db
 from app.services.customer.crm_integration import CRMIntegrationService
 from app.services.customer.lead_service import LeadService
-from app.api.deps import get_current_user
 
 router = APIRouter()
 

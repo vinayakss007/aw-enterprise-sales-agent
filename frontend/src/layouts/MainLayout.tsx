@@ -6,8 +6,9 @@ import {
   ChatBubbleLeftRightIcon, 
   ChartBarIcon, 
   Cog6ToothIcon,
-  UsersIcon,
-  BuildingOfficeIcon
+  BookOpenIcon,
+  SunIcon,
+  MoonIcon,
 } from '@heroicons/react/24/outline';
 import { 
   HomeIcon as HomeIconSolid, 
@@ -15,10 +16,9 @@ import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid, 
   ChartBarIcon as ChartBarIconSolid, 
   Cog6ToothIcon as Cog6ToothIconSolid,
-  UsersIcon as UsersIconSolid,
-  BuildingOfficeIcon as BuildingOfficeIconSolid
 } from '@heroicons/react/24/solid';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import UserMenu from '../components/common/UserMenu';
 
 const navigation = [
@@ -26,11 +26,13 @@ const navigation = [
   { name: 'Leads', href: '/leads', icon: UserGroupIcon, current: false },
   { name: 'Agent', href: '/agent', icon: ChatBubbleLeftRightIcon, current: false },
   { name: 'Campaigns', href: '/campaigns', icon: ChartBarIcon, current: false },
+  { name: 'Knowledge', href: '/knowledge', icon: BookOpenIcon, current: false },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon, current: false },
 ];
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -126,7 +128,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Static sidebar for desktop */}
       <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-        <div className="flex-1 flex flex-col min-h-0 border-r border-gray-200 bg-white">
+        <div className="flex-1 flex flex-col min-h-0 border-r border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700">
           <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
             <div className="flex items-center flex-shrink-0 px-4">
               <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center">
@@ -208,7 +210,19 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {location.pathname === '/dashboard' && 'Dashboard'}
               </h1>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-label="Toggle dark mode"
+              >
+                {theme === 'dark' ? (
+                  <SunIcon className="h-5 w-5" />
+                ) : (
+                  <MoonIcon className="h-5 w-5" />
+                )}
+              </button>
               <UserMenu user={user} onLogout={logout} />
             </div>
           </div>

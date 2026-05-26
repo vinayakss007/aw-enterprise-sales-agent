@@ -1,11 +1,12 @@
-from fastapi import APIRouter
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter
 
 router = APIRouter()
 
 @router.get("/health")
-async def health_check() -> Dict[str, Any]:
+async def health_check() -> dict[str, Any]:
     """
     Overall health check endpoint
     """
@@ -17,14 +18,14 @@ async def health_check() -> Dict[str, Any]:
     }
 
 @router.get("/health/ready")
-async def readiness_check() -> Dict[str, str]:
+async def readiness_check() -> dict[str, str]:
     """
     Readiness check - used for container orchestration
     """
     return {"status": "ready"}
 
 @router.get("/health/live")
-async def liveness_check() -> Dict[str, str]:
+async def liveness_check() -> dict[str, str]:
     """
     Liveness check - indicates if the service is alive
     """

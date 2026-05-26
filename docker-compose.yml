@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   db:
     image: ankane/pgvector:latest
@@ -34,19 +32,39 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/enterprise_sales_agent
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=dev-secret-key-change-in-production
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DEBUG=true
+      # Use the psycopg3 URL scheme to match requirements.txt.
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/enterprise_sales_agent
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-change-in-production
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+      DEBUG: "true"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./backend/uploads:/app/uploads
+      - uploads:/app/uploads
     working_dir: /app
+
+  campaign-worker:
+    # Same image as ``backend`` — runs the campaign execution loop.
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+    command: ["python", "-m", "app.workers", "campaigns", "--interval", "30"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/enterprise_sales_agent
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-key-change-in-production
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+    depends_on:
+      db:
+        condition: service_healthy
 
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -54,6 +72,8 @@ services:
       - "16686:16686"  # Web UI
       - "14268"        # HTTP Thrift
       - "14250"        # gRPC
+    profiles: ["observability"]
 
 volumes:
   postgres_data:
+  uploads:

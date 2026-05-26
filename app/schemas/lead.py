@@ -1,38 +1,40 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, EmailStr
+
 
 class LeadBase(BaseModel):
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    company: Optional[str] = None
-    domain: Optional[str] = None
-    title: Optional[str] = None
-    linkedin_url: Optional[str] = None
-    phone: Optional[str] = None
-    source: Optional[str] = "agent"
+    email: EmailStr | None = None
+    name: str | None = None
+    company: str | None = None
+    domain: str | None = None
+    title: str | None = None
+    linkedin_url: str | None = None
+    phone: str | None = None
+    source: str | None = "agent"
 
 class LeadCreate(LeadBase):
     pass
 
 class LeadUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    name: Optional[str] = None
-    company: Optional[str] = None
-    domain: Optional[str] = None
-    title: Optional[str] = None
-    linkedin_url: Optional[str] = None
-    phone: Optional[str] = None
-    status: Optional[str] = None
+    email: EmailStr | None = None
+    name: str | None = None
+    company: str | None = None
+    domain: str | None = None
+    title: str | None = None
+    linkedin_url: str | None = None
+    phone: str | None = None
+    status: str | None = None
 
 class LeadResponse(LeadBase):
     id: str
     tenant_id: str
     user_id: str
     status: str
-    enriched_data: Optional[Dict[str, Any]] = None
-    crm_contact_id: Optional[str] = None
-    crm_account_id: Optional[str] = None
+    enriched_data: dict[str, Any] | None = None
+    crm_contact_id: str | None = None
+    crm_account_id: str | None = None
     created_at: datetime
     updated_at: datetime
 

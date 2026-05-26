@@ -1,12 +1,12 @@
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.db.models.user import User
-from app.schemas.agent import AgentExecutionResponse
-from app.services.customer.agent_service import AgentService
+
 from app.api.deps import get_current_user
-from app.core.exceptions import LeadNotFoundException
+from app.db.models.user import User
+from app.db.session import get_db
+from app.services.customer.agent_service import AgentService
+from app.services.quota_service import QuotaService
 
 router = APIRouter()
 
@@ -20,6 +20,7 @@ async def execute_agent(
     """
     Execute the sales agent for a specific lead
     """
+    QuotaService(db, current_user).check_agent_run()
     agent_service = AgentService(db, current_user)
     result = await agent_service.execute_agent(lead_id, agent_type)
     

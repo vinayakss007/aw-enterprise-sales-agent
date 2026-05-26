@@ -1,9 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, BigInteger, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
-from datetime import datetime
 import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
+
 from app.db.base import Base
+
 
 class AgentExecution(Base):
     __tablename__ = "agent_executions"

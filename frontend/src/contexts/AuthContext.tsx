@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../services/api';
-import { User } from '../types';
+import React, { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
+import { authService } from '../services/authService';
+import type { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -8,95 +8,80 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (name: string, email: string, password: string) => Promise<void>;
-  checkAuthStatus: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const TOKEN_KEY = 'es_agent_token';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    checkAuthStatus();
+  const refreshUser = useCallback(async () => {
+    try {
+      const me = await authService.me();
+      setUser(me);
+    } catch {
+      // Token invalid / expired — drop it and stay anonymous. The api
+      // interceptor will already have redirected to /login if appropriate.
+      localStorage.removeItem(TOKEN_KEY);
+      setUser(null);
+    }
   }, []);
 
-  const checkAuthStatus = async () => {
-    try {
-      const token = localStorage.getItem('es_agent_token');
+  // On mount: if we have a token, hydrate the user. Otherwise stay anonymous.
+  useEffect(() => {
+    const init = async () => {
+      const token = localStorage.getItem(TOKEN_KEY);
       if (token) {
-        // Verify token and get user info
-        const response = await api.get('/auth/me');
-        setUser(response.data);
+        await refreshUser();
       }
-    } catch (error) {
-      // Token is invalid or expired
-      localStorage.removeItem('es_agent_token');
-      localStorage.removeItem('es_agent_refresh_token');
-    } finally {
       setLoading(false);
-    }
-  };
+    };
+    init();
+  }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
-    try {
-      const response = await api.post('/auth/token', {
-        username: email,
-        password,
-      });
-      
-      const { access_token } = response.data;
-      localStorage.setItem('es_agent_token', access_token);
-      
-      // Get user info after login
-      const userResponse = await api.get('/auth/me');
-      setUser(userResponse.data);
-    } catch (error) {
-      throw new Error('Invalid credentials');
-    }
-  };
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const { access_token } = await authService.login(email, password);
+      localStorage.setItem(TOKEN_KEY, access_token);
+      await refreshUser();
+    },
+    [refreshUser]
+  );
 
-  const logout = () => {
-    localStorage.removeItem('es_agent_token');
-    localStorage.removeItem('es_agent_refresh_token');
+  const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
-  };
+  }, []);
 
-  const register = async (name: string, email: string, password: string) => {
-    try {
-      const response = await api.post('/auth/register', {
-        name,
-        email,
-        password,
-      });
-      
-      // Auto-login after registration
+  const register = useCallback(
+    async (name: string, email: string, password: string) => {
+      await authService.register(name, email, password);
+      // Auto-login so the rest of the app sees a logged-in user.
       await login(email, password);
-    } catch (error) {
-      throw new Error('Registration failed');
-    }
-  };
+    },
+    [login]
+  );
 
-  const value = {
+  const value: AuthContextType = {
     user,
     loading,
     login,
     logout,
     register,
-    checkAuthStatus,
+    refreshUser,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  return ctx;
 };

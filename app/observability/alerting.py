@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +8,7 @@ class AlertManager:
     
     def __init__(self):
         self.is_monitoring = False
-        self.alert_tasks: List[asyncio.Task] = []
+        self.alert_tasks: list[asyncio.Task] = []
         
     async def start_monitoring(self):
         """Start monitoring for alerts"""

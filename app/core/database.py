@@ -1,25 +1,9 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
+"""Backwards-compatible re-exports.
 
-# Create engine and session
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_POOL_OVERFLOW,
-    echo=settings.DEBUG
-)
+The canonical homes are ``app.db.base`` (metadata) and ``app.db.session``
+(engine / session). This module is kept so that older imports keep working.
+"""
+from app.db.base import Base
+from app.db.session import SessionLocal, engine, get_db
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-__all__ = ['engine', 'SessionLocal', 'Base', 'get_db']
+__all__ = ["engine", "SessionLocal", "Base", "get_db"]

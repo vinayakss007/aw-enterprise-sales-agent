@@ -1,11 +1,12 @@
-from typing import List, Optional
-from sqlalchemy import and_, or_, func
-from sqlalchemy.orm import Session, joinedload
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session
+
 from app.db.models.lead import Lead
 from app.db.models.user import User
-from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
-from app.core.exceptions import LeadNotFoundException
+from app.schemas.lead import LeadCreate, LeadResponse, LeadUpdate
+
 
 class LeadService:
     def __init__(self, db: Session, user: User):
@@ -17,11 +18,11 @@ class LeadService:
         self, 
         skip: int = 0, 
         limit: int = 50, 
-        status: Optional[str] = None, 
-        search: Optional[str] = None, 
+        status: str | None = None, 
+        search: str | None = None, 
         sort_by: str = "created_at", 
         sort_order: str = "desc"
-    ) -> List[LeadResponse]:
+    ) -> list[LeadResponse]:
         """
         Get paginated list of leads with filtering and sorting
         """
@@ -57,8 +58,8 @@ class LeadService:
         """
         lead = Lead(
             tenant_id=self.tenant_id,
-            created_by=self.user.id,
-            **lead_in.model_dump()
+            user_id=self.user.id,
+            **lead_in.model_dump(),
         )
         
         self.db.add(lead)
@@ -67,7 +68,7 @@ class LeadService:
         
         return self.lead_to_response(lead)
 
-    async def get_lead(self, lead_id: str) -> Optional[LeadResponse]:
+    async def get_lead(self, lead_id: str) -> LeadResponse | None:
         """
         Get a specific lead by ID
         """
@@ -83,7 +84,7 @@ class LeadService:
             
         return self.lead_to_response(lead)
 
-    async def update_lead(self, lead_id: str, lead_in: LeadUpdate) -> Optional[LeadResponse]:
+    async def update_lead(self, lead_id: str, lead_in: LeadUpdate) -> LeadResponse | None:
         """
         Update lead information
         """
@@ -127,7 +128,7 @@ class LeadService:
         self.db.commit()
         return True
 
-    async def get_lead_activity(self, lead_id: str) -> List[dict]:
+    async def get_lead_activity(self, lead_id: str) -> list[dict]:
         """
         Get activity history for a lead
         """

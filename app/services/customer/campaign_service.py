@@ -323,6 +323,19 @@ class CampaignService:
             )
         ).all()
 
+        # Determine when the first step should fire. If the campaign has a
+        # leading step with ``delay_days`` set, honour it so newly added
+        # leads don't get pinged immediately when the operator wants a wait.
+        first_step = (
+            self.db.query(CampaignStep)
+            .filter(CampaignStep.campaign_id == campaign_id)
+            .order_by(CampaignStep.order)
+            .first()
+        )
+        from datetime import timedelta
+        delay_days = (first_step.delay_days or 0) if first_step else 0
+        next_action_date = datetime.utcnow() + timedelta(days=delay_days)
+
         added_count = 0
         for lead in leads:
             # Check if lead is already in campaign
@@ -338,7 +351,7 @@ class CampaignService:
                     campaign_id=campaign_id,
                     lead_id=lead.id,
                     status='pending',  # Will be activated when campaign is active
-                    next_action_date=datetime.utcnow()
+                    next_action_date=next_action_date
                 )
                 self.db.add(assignment)
                 added_count += 1

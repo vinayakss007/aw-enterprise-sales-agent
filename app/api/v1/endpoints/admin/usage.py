@@ -1,19 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Optional
-from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.db.models.user import User
-from app.schemas.usage import UsageMetricsResponse, TenantUsageResponse
-from app.services.admin.usage_service import UsageService
+
 from app.api.deps import get_current_admin
+from app.db.models.user import User
+from app.db.session import get_db
+from app.schemas.usage import TenantUsageResponse, UsageMetricsResponse
+from app.services.admin.usage_service import UsageService
 
 router = APIRouter()
 
-@router.get("/", response_model=List[TenantUsageResponse])
+@router.get("/", response_model=list[TenantUsageResponse])
 async def get_tenant_usage(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     limit: int = Query(50, le=1000),
     offset: int = Query(0),
     sort_by: str = Query("usage", regex="^(usage|cost|users|tasks)$"),
@@ -43,8 +43,8 @@ async def export_usage_report(
 
 @router.get("/metrics", response_model=UsageMetricsResponse)
 async def get_system_usage(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     granularity: str = Query("day", regex="^(hour|day|week|month)$"),
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)

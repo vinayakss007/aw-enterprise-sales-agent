@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
-from sqlalchemy import func, and_, text
+from typing import Any
+
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
-from app.db.models.usage_metrics import UsageMetrics
+
 from app.db.models.tenant import Tenant
-from app.db.models.user import User
-from app.schemas.usage import UsageMetricsResponse, TenantUsageResponse
+from app.db.models.usage_metrics import UsageMetrics
+from app.schemas.usage import TenantUsageResponse, UsageMetricsResponse
+
 
 class UsageService:
     def __init__(self, db: Session):
@@ -13,8 +15,8 @@ class UsageService:
 
     async def get_system_metrics(
         self, 
-        start_date: Optional[str] = None, 
-        end_date: Optional[str] = None, 
+        start_date: str | None = None, 
+        end_date: str | None = None, 
         granularity: str = "day"
     ) -> UsageMetricsResponse:
         """
@@ -57,13 +59,13 @@ class UsageService:
 
     async def get_tenant_usage(
         self, 
-        start_date: Optional[str], 
-        end_date: Optional[str], 
+        start_date: str | None, 
+        end_date: str | None, 
         limit: int, 
         offset: int, 
         sort_by: str, 
         sort_order: str
-    ) -> List[TenantUsageResponse]:
+    ) -> list[TenantUsageResponse]:
         """
         Get tenant usage with pagination
         """
@@ -91,19 +93,17 @@ class UsageService:
         )
 
         # Apply sorting
-        if sort_order == "desc":
-            sort_func = lambda x: x.desc()
-        else:
-            sort_func = lambda x: x.asc()
+        def _direction(col):
+            return col.desc() if sort_order == "desc" else col.asc()
 
         if sort_by == "usage":
-            query = query.order_by(sort_func(func.sum(UsageMetrics.value)))
+            query = query.order_by(_direction(func.sum(UsageMetrics.value)))
         elif sort_by == "cost":
-            query = query.order_by(sort_func(func.sum(UsageMetrics.cost_cents)))
+            query = query.order_by(_direction(func.sum(UsageMetrics.cost_cents)))
         elif sort_by == "users":
-            query = query.order_by(sort_func(func.count(func.distinct(UsageMetrics.user_id))))
+            query = query.order_by(_direction(func.count(func.distinct(UsageMetrics.user_id))))
         else:  # tasks
-            query = query.order_by(sort_func(func.count(UsageMetrics.id)))
+            query = query.order_by(_direction(func.count(UsageMetrics.id)))
 
         # Apply pagination
         results = query.offset(offset).limit(limit).all()
@@ -119,7 +119,7 @@ class UsageService:
             ) for result in results
         ]
 
-    def _get_totals(self, start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+    def _get_totals(self, start_date: datetime, end_date: datetime) -> dict[str, Any]:
         """
         Get aggregated totals for the date range
         """
@@ -151,7 +151,7 @@ class UsageService:
         start_date: str, 
         end_date: str, 
         report_type: str = "csv"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Export usage report in specified format
         """

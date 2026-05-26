@@ -1,9 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Date, ForeignKey
+import uuid
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Column, Date, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime, date
-import uuid
+
 from app.db.base import Base
+
 
 class UsageMetrics(Base):
     __tablename__ = "usage_metrics"

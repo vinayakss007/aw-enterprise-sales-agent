@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional
 from datetime import datetime
 from enum import Enum
+
+from pydantic import BaseModel, EmailStr
+
 
 class RoleEnum(str, Enum):
     owner = "owner"
@@ -17,8 +18,8 @@ class UserCreate(UserBase):
     password: str
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    role: Optional[RoleEnum] = None
+    name: str | None = None
+    role: RoleEnum | None = None
 
 class UserResponse(UserBase):
     id: str
@@ -26,7 +27,7 @@ class UserResponse(UserBase):
     role: RoleEnum
     is_active: bool
     is_verified: bool
-    last_login_at: Optional[datetime] = None
+    last_login_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -38,6 +39,6 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    email: Optional[str] = None
-    user_id: Optional[str] = None
-    tenant_id: Optional[str] = None
+    email: str | None = None
+    user_id: str | None = None
+    tenant_id: str | None = None

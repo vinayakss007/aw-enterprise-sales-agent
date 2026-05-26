@@ -1,7 +1,8 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+
+from pydantic import BaseModel
+
 
 class CampaignStatus(str, Enum):
     draft = "draft"
@@ -22,24 +23,24 @@ class CampaignStep(BaseModel):
     title: str
     content: str
     delay_days: int
-    subject: Optional[str] = None
+    subject: str | None = None
 
 class CampaignBase(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 class CampaignCreate(CampaignBase):
-    steps: List[CampaignStep]
+    steps: list[CampaignStep]
 
 class CampaignUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[CampaignStatus] = None
+    name: str | None = None
+    description: str | None = None
+    status: CampaignStatus | None = None
 
 class CampaignResponse(CampaignBase):
     id: str
     status: CampaignStatus
-    steps: List[CampaignStep]
+    steps: list[CampaignStep]
     created_at: datetime
     updated_at: datetime
     active_leads: int

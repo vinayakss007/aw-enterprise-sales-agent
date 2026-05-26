@@ -14,19 +14,12 @@ Authorization: Bearer <token>
 ### Authentication
 
 #### POST /api/v1/auth/token
-Authenticate user and retrieve access token
+Authenticate user and retrieve access token. The endpoint accepts
+``application/x-www-form-urlencoded`` (OAuth2 password flow), not JSON.
 
-**Request:**
-```json
-{
-  "grant_type": "password",
-  "username": "user@example.com",
-  "password": "user_password",
-  "scope": "",
-  "client_id": "",
-  "client_secret": ""
-}
-```
+**Form fields:**
+- `username` — user's email
+- `password` — user's password
 
 **Response:**
 ```json
@@ -260,7 +253,7 @@ Execute an agent on a specific lead
   "user_id": "uuid",
   "lead_id": "uuid",
   "agent_type": "research",
-  "trajectory": "execution_steps_as_string",
+  "trajectory": [],
   "success": true,
   "tokens_input": 1200,
   "tokens_output": 500,
@@ -292,7 +285,7 @@ Get agent execution history
       "user_id": "uuid",
       "lead_id": "uuid",
       "agent_type": "research",
-      "trajectory": "execution_steps_as_string",
+      "trajectory": [],
       "success": true,
       "tokens_input": 1200,
       "tokens_output": 500,
@@ -321,7 +314,7 @@ Get a specific agent execution
   "user_id": "uuid",
   "lead_id": "uuid",
   "agent_type": "research",
-  "trajectory": "execution_steps_as_string",
+  "trajectory": [],
   "success": true,
   "tokens_input": 1200,
   "tokens_output": 500,

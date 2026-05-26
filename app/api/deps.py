@@ -1,10 +1,12 @@
+from collections.abc import Generator
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Generator
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
+
+from app.db.models.user import User
 from app.db.session import SessionLocal
 from app.services.auth.jwt import verify_token
-from app.db.models.user import User
 
 security = HTTPBearer()
 

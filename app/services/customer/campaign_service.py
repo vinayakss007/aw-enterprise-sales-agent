@@ -1,11 +1,18 @@
-from typing import List, Optional, Dict, Any
-from sqlalchemy import and_, func
-from sqlalchemy.orm import Session, joinedload
-from datetime import datetime, timedelta
-from app.db.models.campaign import Campaign, CampaignStep, CampaignAssignment
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import and_
+from sqlalchemy.orm import Session
+
+from app.db.models.campaign import Campaign, CampaignAssignment, CampaignStep
 from app.db.models.lead import Lead
 from app.db.models.user import User
-from app.schemas.campaign import CampaignCreate, CampaignUpdate, CampaignResponse, CampaignStatus, CampaignStepType, CampaignStep
+from app.schemas.campaign import (
+    CampaignCreate,
+    CampaignResponse,
+    CampaignUpdate,
+)
+
 
 class CampaignService:
     def __init__(self, db: Session, user: User):
@@ -17,7 +24,7 @@ class CampaignService:
         self, 
         skip: int = 0, 
         limit: int = 50
-    ) -> List[CampaignResponse]:
+    ) -> list[CampaignResponse]:
         """
         Get paginated list of campaigns
         """
@@ -123,7 +130,7 @@ class CampaignService:
             completed_leads=0
         )
 
-    async def get_campaign(self, campaign_id: str) -> Optional[CampaignResponse]:
+    async def get_campaign(self, campaign_id: str) -> CampaignResponse | None:
         """
         Get a specific campaign by ID
         """
@@ -176,7 +183,7 @@ class CampaignService:
             completed_leads=completed_count
         )
 
-    async def update_campaign(self, campaign_id: str, campaign_in: CampaignUpdate) -> Optional[CampaignResponse]:
+    async def update_campaign(self, campaign_id: str, campaign_in: CampaignUpdate) -> CampaignResponse | None:
         """
         Update campaign information
         """
@@ -294,7 +301,7 @@ class CampaignService:
         self.db.commit()
         return True
 
-    async def add_leads_to_campaign(self, campaign_id: str, lead_ids: List[str]) -> Dict[str, Any]:
+    async def add_leads_to_campaign(self, campaign_id: str, lead_ids: list[str]) -> dict[str, Any]:
         """
         Add leads to a campaign
         """
@@ -316,6 +323,19 @@ class CampaignService:
             )
         ).all()
 
+        # Determine when the first step should fire. If the campaign has a
+        # leading step with ``delay_days`` set, honour it so newly added
+        # leads don't get pinged immediately when the operator wants a wait.
+        first_step = (
+            self.db.query(CampaignStep)
+            .filter(CampaignStep.campaign_id == campaign_id)
+            .order_by(CampaignStep.order)
+            .first()
+        )
+        from datetime import timedelta
+        delay_days = (first_step.delay_days or 0) if first_step else 0
+        next_action_date = datetime.utcnow() + timedelta(days=delay_days)
+
         added_count = 0
         for lead in leads:
             # Check if lead is already in campaign
@@ -331,7 +351,7 @@ class CampaignService:
                     campaign_id=campaign_id,
                     lead_id=lead.id,
                     status='pending',  # Will be activated when campaign is active
-                    next_action_date=datetime.utcnow()
+                    next_action_date=next_action_date
                 )
                 self.db.add(assignment)
                 added_count += 1

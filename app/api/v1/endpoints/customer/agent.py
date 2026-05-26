@@ -1,12 +1,11 @@
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
 from sqlalchemy.orm import Session
-from app.db.session import get_db
-from app.db.models.user import User
-from app.schemas.agent import AgentExecutionResponse
-from app.services.customer.agent_service import AgentService
+
 from app.api.deps import get_current_user
-from app.core.exceptions import LeadNotFoundException
+from app.db.models.user import User
+from app.db.session import get_db
+from app.services.customer.agent_service import AgentService
 
 router = APIRouter()
 

@@ -1,16 +1,16 @@
-from typing import List, Optional
-from sqlalchemy import func
-from sqlalchemy.orm import Session
 from datetime import datetime
+
+from sqlalchemy.orm import Session
+
 from app.db.models.tenant import Tenant
-from app.db.models.user import User
 from app.schemas.tenant import TenantResponse
+
 
 class TenantService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_all_tenants(self, skip: int = 0, limit: int = 50) -> List[TenantResponse]:
+    async def get_all_tenants(self, skip: int = 0, limit: int = 50) -> list[TenantResponse]:
         """
         Get all tenants
         """
@@ -33,7 +33,7 @@ class TenantService:
             for tenant in tenants
         ]
 
-    async def get_tenant(self, tenant_id: str) -> Optional[TenantResponse]:
+    async def get_tenant(self, tenant_id: str) -> TenantResponse | None:
         """
         Get a specific tenant by ID
         """

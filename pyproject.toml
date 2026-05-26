@@ -1,0 +1,26 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: tests that require a real Postgres reachable via TEST_DATABASE_URL",
+]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# B008: FastAPI uses ``Depends(...)`` and ``Query(...)`` in argument defaults
+#       intentionally — that's how the framework injects dependencies.
+# UP042: ``class Foo(str, Enum)`` is a recognised pydantic pattern; switching
+#       to ``StrEnum`` is a separate cleanup.
+ignore = ["E501", "B008", "UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-export aggregations live in package __init__.py; F401 is the point.
+"**/__init__.py" = ["F401"]
+# Schemas re-export submodule symbols for backwards compatibility.
+"app/schemas/__init__.py" = ["F401"]
+"app/db/models/__init__.py" = ["F401"]

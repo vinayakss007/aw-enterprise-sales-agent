@@ -1,15 +1,16 @@
+
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
-from app.db.session import get_db
-from app.db.models.user import User
-from app.schemas.lead import LeadCreate, LeadUpdate, LeadResponse
-from app.services.customer.lead_service import LeadService
-from app.api.deps import get_current_user
 from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user
+from app.db.models.user import User
+from app.db.session import get_db
+from app.schemas.lead import LeadCreate, LeadResponse, LeadUpdate
+from app.services.customer.lead_service import LeadService
 
 router = APIRouter()
 
-@router.get("/", response_model=List[LeadResponse])
+@router.get("/", response_model=list[LeadResponse])
 async def list_leads(
     skip: int = 0,
     limit: int = 100,

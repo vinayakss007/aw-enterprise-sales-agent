@@ -82,10 +82,13 @@ def create_app() -> FastAPI:
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(TracingMiddleware)
+    from app.observability.rate_limit import build_default_limiter
+
     app.add_middleware(
         RateLimitMiddleware,
         limit=settings.RATE_LIMIT_REQUESTS,
         window=settings.RATE_LIMIT_WINDOW,
+        limiter=build_default_limiter(settings.REDIS_URL),
     )
 
     app.include_router(api_router, prefix=settings.API_V1_STR)

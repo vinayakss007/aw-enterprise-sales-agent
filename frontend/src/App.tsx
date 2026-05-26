@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToastProvider } from './contexts/ToastContext';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -25,6 +26,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import TenantsPage from './pages/admin/Tenants';
 import UsersPage from './pages/admin/Users';
 import UsagePage from './pages/admin/Usage';
+import AuditPage from './pages/admin/Audit';
 import SettingsPage from './pages/admin/Settings';
 
 // Components
@@ -69,7 +71,7 @@ const AppContent = () => {
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          
+
           {/* Customer routes */}
           <Route
             path="/"
@@ -162,6 +164,16 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/admin/audit"
+            element={
+              <AdminRoute>
+                <AdminLayout>
+                  <AuditPage />
+                </AdminLayout>
+              </AdminRoute>
+            }
+          />
+          <Route
             path="/admin/settings"
             element={
               <AdminRoute>
@@ -185,9 +197,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -1,20 +1,36 @@
-"""Customer lead endpoints + audit hooks for create/delete."""
+"""Customer lead endpoints + audit hooks for create/delete + bulk + enrichment."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Any
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.db.models.lead import Lead
 from app.db.models.user import User
 from app.db.session import get_db
 from app.schemas.lead import LeadCreate, LeadResponse, LeadUpdate
 from app.services.admin.audit_service import AuditService
+from app.services.customer.enrichment_service import EnrichmentService
+from app.services.customer.lead_import import (
+    export_leads_csv,
+    import_leads_csv,
+)
 from app.services.customer.lead_service import LeadService
 
 router = APIRouter()
 
 
-def _audit_context(request: Request) -> dict:
+def _audit_context(request: Request) -> dict[str, Any]:
     return {
         "ip_address": request.client.host if request.client else None,
         "user_agent": request.headers.get("user-agent"),
@@ -51,6 +67,71 @@ async def create_lead(
         **_audit_context(request),
     )
     return lead
+
+
+@router.get("/export.csv")
+async def export_leads(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Stream every lead in the tenant as CSV.
+
+    Lives above ``/{lead_id}`` because FastAPI matches in declaration order
+    and ``export.csv`` would otherwise be swallowed by the path param.
+    """
+    leads = (
+        db.query(Lead)
+        .filter(Lead.tenant_id == current_user.tenant_id)
+        .order_by(Lead.created_at.desc())
+        .all()
+    )
+    csv_text = export_leads_csv(leads)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="leads.csv"',
+        },
+    )
+
+
+@router.post("/import")
+async def import_leads(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Bulk-create / update leads from a CSV upload."""
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Expected a .csv file")
+
+    raw = await file.read()
+    if len(raw) > 10 * 1024 * 1024:  # 10 MB safety cap
+        raise HTTPException(status_code=413, detail="CSV exceeds 10MB cap")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"CSV must be UTF-8: {exc}"
+        ) from exc
+
+    report = import_leads_csv(db, current_user, text=text)
+    AuditService(db).record(
+        tenant_id=str(current_user.tenant_id),
+        user_id=str(current_user.id),
+        action="lead.import",
+        resource_type="lead",
+        resource_id=file.filename,
+        changes_after={
+            "created": report.created,
+            "updated": report.updated,
+            "skipped": report.skipped,
+            "error_count": len(report.errors),
+        },
+        **_audit_context(request),
+    )
+    return report.as_dict()
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)
@@ -110,3 +191,30 @@ async def delete_lead(
         **_audit_context(request),
     )
     return {"message": "Lead archived successfully"}
+
+
+@router.post("/{lead_id}/enrich", response_model=LeadResponse)
+async def enrich_lead(
+    lead_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run the configured enrichment provider against this lead."""
+    service = EnrichmentService(db, current_user)
+    lead = await service.enrich_lead(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    AuditService(db).record(
+        tenant_id=str(current_user.tenant_id),
+        user_id=str(current_user.id),
+        action="lead.enrich",
+        resource_type="lead",
+        resource_id=lead.id,
+        changes_after={
+            "provider": (lead.enriched_data or {}).get("provider"),
+            "confidence": (lead.enriched_data or {}).get("confidence"),
+        },
+        **_audit_context(request),
+    )
+    return await LeadService(db, current_user).get_lead(lead_id)

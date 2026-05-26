@@ -1,7 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowDownTrayIcon,
   ArrowPathIcon,
+  ArrowUpTrayIcon,
+  BoltIcon,
   MagnifyingGlassIcon,
   PencilIcon,
   PlusIcon,
@@ -9,7 +12,8 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { Modal } from '../../components/ui/Modal';
-import leadService from '../../services/leadService';
+import { useToast } from '../../contexts/ToastContext';
+import leadService, { ImportReport } from '../../services/leadService';
 import type { Lead, LeadCreate, LeadUpdate } from '../../types';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -72,11 +76,14 @@ const LeadsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Lead | null>(null);
+  const [archiveCandidate, setArchiveCandidate] = useState<Lead | null>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [createForm, setCreateForm] = useState<LeadCreate>(emptyForm);
   const [editForm, setEditForm] = useState<LeadUpdate>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const leadsQuery = useQuery<Lead[]>({
     queryKey: ['leads', 'all'],
@@ -99,14 +106,17 @@ const LeadsPage: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: (payload: LeadCreate) => leadService.create(payload),
-    onSuccess: () => {
+    onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       setCreateOpen(false);
       setCreateForm(emptyForm);
-      setSubmitError(null);
+      toast(`Created ${lead.name || lead.email || 'lead'}`, 'success');
     },
     onError: (err: unknown) => {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to create lead');
+      toast(
+        err instanceof Error ? err.message : 'Failed to create lead',
+        'error'
+      );
     },
   });
 
@@ -117,22 +127,98 @@ const LeadsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       setEditing(null);
       setEditForm({});
-      setSubmitError(null);
+      toast('Lead updated', 'success');
     },
     onError: (err: unknown) => {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to update lead');
+      toast(
+        err instanceof Error ? err.message : 'Failed to update lead',
+        'error'
+      );
     },
   });
 
   const archiveMutation = useMutation({
     mutationFn: (id: string) => leadService.archive(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      setArchiveCandidate(null);
+      toast('Lead archived', 'success');
+    },
+    onError: (err: unknown) => {
+      toast(
+        err instanceof Error ? err.message : 'Failed to archive lead',
+        'error'
+      );
+    },
   });
 
-  const handleArchive = (lead: Lead) => {
-    if (window.confirm(`Archive ${lead.name || lead.email}?`)) {
-      archiveMutation.mutate(lead.id);
+  const enrichMutation = useMutation({
+    mutationFn: (id: string) => leadService.enrich(id),
+    onSuccess: (lead) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      const provider = (lead.enriched_data as Record<string, unknown> | undefined)
+        ?.provider;
+      toast(
+        `Enriched ${lead.name || lead.email || 'lead'}${
+          provider ? ` via ${provider}` : ''
+        }`,
+        'success'
+      );
+    },
+    onError: (err: unknown) => {
+      toast(
+        err instanceof Error ? err.message : 'Enrichment failed',
+        'error'
+      );
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => leadService.importCsv(file),
+    onSuccess: (report) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      setImportReport(report);
+      const errorSummary = report.errors.length
+        ? `, ${report.errors.length} error${report.errors.length === 1 ? '' : 's'}`
+        : '';
+      toast(
+        `CSV import: +${report.created} created, ${report.updated} updated, ${report.skipped} skipped${errorSummary}`,
+        report.errors.length ? 'warning' : 'success'
+      );
+    },
+    onError: (err: unknown) => {
+      toast(
+        err instanceof Error ? err.message : 'CSV import failed',
+        'error'
+      );
+    },
+  });
+
+  const handleExport = async () => {
+    try {
+      const blob = await leadService.exportCsv();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast('Lead CSV downloaded', 'success');
+    } catch (err) {
+      toast(
+        err instanceof Error ? err.message : 'CSV export failed',
+        'error'
+      );
     }
+  };
+
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file later
+    if (!file) return;
+    importMutation.mutate(file);
   };
 
   const openEdit = (lead: Lead) => {
@@ -155,10 +241,35 @@ const LeadsPage: React.FC = () => {
         <div className="sm:flex-auto">
           <h1 className="text-xl font-semibold text-gray-900">Leads</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Manage and track sales leads for your tenant.
+            Manage and track sales leads for your tenant. Import / export CSV,
+            and run the configured enrichment provider per lead.
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <ArrowDownTrayIcon className="-ml-1 mr-2 h-5 w-5" />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importMutation.isPending}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          >
+            <ArrowUpTrayIcon className="-ml-1 mr-2 h-5 w-5" />
+            {importMutation.isPending ? 'Importing…' : 'Import CSV'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleFilePick}
+            className="hidden"
+          />
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
@@ -233,54 +344,93 @@ const LeadsPage: React.FC = () => {
                 <th className="px-3 py-3.5 text-left text-xs font-medium text-gray-500 uppercase">
                   Status
                 </th>
+                <th className="px-3 py-3.5 text-left text-xs font-medium text-gray-500 uppercase">
+                  Enrichment
+                </th>
                 <th className="relative py-3.5 pl-3 pr-4">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-gray-50">
-                  <td className="py-4 pl-4 pr-3 text-sm">
-                    <div className="font-medium text-gray-900">
-                      {lead.name || '(no name)'}
-                    </div>
-                    <div className="text-gray-500">{lead.domain}</div>
-                  </td>
-                  <td className="px-3 py-4 text-sm text-gray-700">{lead.company}</td>
-                  <td className="px-3 py-4 text-sm text-gray-700">{lead.title}</td>
-                  <td className="px-3 py-4 text-sm text-gray-700">{lead.email}</td>
-                  <td className="px-3 py-4 text-sm">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        STATUS_COLORS[lead.status] || 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="py-4 pl-3 pr-4 text-right text-sm font-medium">
-                    <div className="flex justify-end space-x-2">
-                      <button
-                        type="button"
-                        title="Edit"
-                        className="text-indigo-600 hover:text-indigo-900"
-                        onClick={() => openEdit(lead)}
+              {filteredLeads.map((lead) => {
+                const provider = (
+                  lead.enriched_data as Record<string, unknown> | undefined
+                )?.provider as string | undefined;
+                const confidence = (
+                  lead.enriched_data as Record<string, unknown> | undefined
+                )?.confidence as number | undefined;
+                const enriching =
+                  enrichMutation.isPending &&
+                  enrichMutation.variables === lead.id;
+                return (
+                  <tr key={lead.id} className="hover:bg-gray-50">
+                    <td className="py-4 pl-4 pr-3 text-sm">
+                      <div className="font-medium text-gray-900">
+                        {lead.name || '(no name)'}
+                      </div>
+                      <div className="text-gray-500">{lead.domain}</div>
+                    </td>
+                    <td className="px-3 py-4 text-sm text-gray-700">{lead.company}</td>
+                    <td className="px-3 py-4 text-sm text-gray-700">{lead.title}</td>
+                    <td className="px-3 py-4 text-sm text-gray-700">{lead.email}</td>
+                    <td className="px-3 py-4 text-sm">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          STATUS_COLORS[lead.status] || 'bg-gray-100 text-gray-800'
+                        }`}
                       >
-                        <PencilIcon className="h-5 w-5" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Archive"
-                        className="text-red-600 hover:text-red-900"
-                        onClick={() => handleArchive(lead)}
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {lead.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4 text-xs text-gray-500">
+                      {provider ? (
+                        <>
+                          <span className="font-mono">{provider}</span>
+                          {typeof confidence === 'number' && (
+                            <span className="ml-2">
+                              ({Math.round(confidence * 100)}%)
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="py-4 pl-3 pr-4 text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          type="button"
+                          title="Enrich"
+                          className="text-amber-600 hover:text-amber-900 disabled:opacity-50"
+                          onClick={() => enrichMutation.mutate(lead.id)}
+                          disabled={enriching}
+                        >
+                          <BoltIcon
+                            className={`h-5 w-5 ${enriching ? 'animate-pulse' : ''}`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          title="Edit"
+                          className="text-indigo-600 hover:text-indigo-900"
+                          onClick={() => openEdit(lead)}
+                        >
+                          <PencilIcon className="h-5 w-5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Archive"
+                          className="text-red-600 hover:text-red-900"
+                          onClick={() => setArchiveCandidate(lead)}
+                        >
+                          <TrashIcon className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -289,10 +439,7 @@ const LeadsPage: React.FC = () => {
       {/* Create modal */}
       <Modal
         isOpen={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          setSubmitError(null);
-        }}
+        onClose={() => setCreateOpen(false)}
         title="Add lead"
         size="lg"
       >
@@ -304,7 +451,6 @@ const LeadsPage: React.FC = () => {
           className="space-y-4"
         >
           <LeadFormFields values={createForm} onChange={setCreateForm} />
-          {submitError && <p className="text-sm text-red-600">{submitError}</p>}
           <div className="flex justify-end space-x-2">
             <button
               type="button"
@@ -327,10 +473,7 @@ const LeadsPage: React.FC = () => {
       {/* Edit modal */}
       <Modal
         isOpen={!!editing}
-        onClose={() => {
-          setEditing(null);
-          setSubmitError(null);
-        }}
+        onClose={() => setEditing(null)}
         title={`Edit ${editing?.name || editing?.email || ''}`}
         size="lg"
       >
@@ -356,7 +499,6 @@ const LeadsPage: React.FC = () => {
                 <option value="closed">Closed</option>
               </select>
             </label>
-            {submitError && <p className="text-sm text-red-600">{submitError}</p>}
             <div className="flex justify-end space-x-2">
               <button
                 type="button"
@@ -374,6 +516,88 @@ const LeadsPage: React.FC = () => {
               </button>
             </div>
           </form>
+        )}
+      </Modal>
+
+      {/* Archive confirm modal — replaces window.confirm */}
+      <Modal
+        isOpen={!!archiveCandidate}
+        onClose={() => setArchiveCandidate(null)}
+        title="Archive lead"
+      >
+        {archiveCandidate && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">
+              Archive{' '}
+              <strong>{archiveCandidate.name || archiveCandidate.email}</strong>?
+              This sets the status to ``archived``; the row stays in the
+              database but is hidden from the default view.
+            </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm border rounded-md"
+                onClick={() => setArchiveCandidate(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => archiveMutation.mutate(archiveCandidate.id)}
+                disabled={archiveMutation.isPending}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md disabled:opacity-50"
+              >
+                {archiveMutation.isPending ? 'Archiving…' : 'Archive lead'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Import report modal — surfaces row-level errors when present */}
+      <Modal
+        isOpen={!!importReport}
+        onClose={() => setImportReport(null)}
+        title="CSV import results"
+      >
+        {importReport && (
+          <div className="space-y-3 text-sm">
+            <ul className="grid grid-cols-2 gap-2">
+              <li>
+                Created: <strong>{importReport.created}</strong>
+              </li>
+              <li>
+                Updated: <strong>{importReport.updated}</strong>
+              </li>
+              <li>
+                Skipped: <strong>{importReport.skipped}</strong>
+              </li>
+              <li>
+                Errors: <strong>{importReport.errors.length}</strong>
+              </li>
+            </ul>
+            {importReport.errors.length > 0 && (
+              <div>
+                <p className="font-medium">Row errors:</p>
+                <ul className="list-disc list-inside text-xs text-red-700 max-h-48 overflow-y-auto">
+                  {importReport.errors.map((e, i) => (
+                    <li key={i}>
+                      Row {e.row}: {e.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="px-4 py-2 text-sm border rounded-md"
+                onClick={() => setImportReport(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>

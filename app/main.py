@@ -24,6 +24,7 @@ from app.observability.middleware import (
     MetricsMiddleware,
     TracingMiddleware,
 )
+from app.observability.rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,11 @@ def create_app() -> FastAPI:
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(MetricsMiddleware)
     app.add_middleware(TracingMiddleware)
+    app.add_middleware(
+        RateLimitMiddleware,
+        limit=settings.RATE_LIMIT_REQUESTS,
+        window=settings.RATE_LIMIT_WINDOW,
+    )
 
     app.include_router(api_router, prefix=settings.API_V1_STR)
     app.include_router(health_router, prefix=settings.API_V1_STR)

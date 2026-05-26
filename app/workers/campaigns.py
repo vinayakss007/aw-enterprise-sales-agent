@@ -1,20 +1,24 @@
 """Campaign execution worker.
 
-Walks active campaigns and fires their due steps. The implementation is
-pragmatic for v1:
+Walks active campaigns and fires their due steps. Two modes per email step:
 
-* Email steps are sent via the configured ``EmailSender`` after a small
-  ``{{name}} / {{company}} / ...`` template substitution against the lead.
-* ``call`` and ``task`` steps are recorded but not actioned — those are
-  manual follow-ups for the sales rep.
-* Errors mark the affected ``CampaignAssignment`` as ``failed`` rather than
-  retrying. Retry/back-off is left as a follow-up.
+* **Template mode** — ``step.content`` is a literal email body with optional
+  ``{{name}} / {{first_name}} / {{company}} / ...`` substitutions. This is
+  the default and requires no LLM.
+* **Agent mode** — ``step.content`` is empty or contains the marker
+  ``[[agent]]``. The worker runs the configured ``SalesAgent`` on the lead;
+  the agent's drafted subject + body are sent and an ``AgentExecution`` row
+  is persisted so token/cost shows up in the user's history.
 
-The worker is safe to run as ``python -m app.workers campaigns`` (one-shot or
-loop) or via ``POST /api/v1/admin/campaigns/tick`` for on-demand processing
-in tests and during development.
+``call`` and ``task`` steps are recorded but not actioned — manual rep
+follow-up. Errors mark the affected ``CampaignAssignment`` as ``failed``;
+retry/back-off is left as a follow-up.
 
-Concurrency: today this assumes a single worker process. Add
+The worker is safe to run as ``python -m app.workers campaigns`` (one-shot
+or loop) or via ``POST /api/v1/admin/campaigns/tick`` for on-demand
+processing in tests and during development.
+
+Concurrency: assumes a single worker process. Add
 ``SELECT ... FOR UPDATE SKIP LOCKED`` to ``_select_due`` before running
 multiple workers in parallel.
 """
@@ -23,18 +27,26 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session, selectinload
 
+from app.agents.sales_agent.graph import SalesAgent
+from app.agents.sales_agent.state import AgentState
+from app.db.models.agent_execution import AgentExecution
 from app.db.models.campaign import Campaign, CampaignAssignment, CampaignStep
 from app.db.models.lead import Lead
 from app.integrations.email.base import EmailMessage, EmailSender
 from app.integrations.email.factory import get_email_sender
 
 logger = logging.getLogger(__name__)
+
+
+# Marker that flips a step from "template" mode into "agent" mode.
+AGENT_MARKER = "[[agent]]"
 
 
 @dataclass
@@ -47,6 +59,7 @@ class WorkerStats:
     failed: int = 0
     skipped: int = 0
     emails_sent: int = 0
+    agent_runs: int = 0
     errors: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -57,6 +70,7 @@ class WorkerStats:
             "failed": self.failed,
             "skipped": self.skipped,
             "emails_sent": self.emails_sent,
+            "agent_runs": self.agent_runs,
             "errors": self.errors,
         }
 
@@ -89,6 +103,27 @@ def render_template(text: str, lead: Lead) -> str:
     return _TEMPLATE_RE.sub(_sub, text)
 
 
+def _is_agent_step(step: CampaignStep) -> bool:
+    """A step runs the agent when its content is empty or marked ``[[agent]]``."""
+    content = (step.content or "").strip()
+    if not content:
+        return True
+    return AGENT_MARKER in content.lower()
+
+
+def _lead_to_dict(lead: Lead) -> dict[str, Any]:
+    return {
+        "id": str(lead.id),
+        "email": lead.email,
+        "name": lead.name,
+        "company": lead.company,
+        "domain": lead.domain,
+        "title": lead.title,
+        "linkedin_url": lead.linkedin_url,
+        "phone": lead.phone,
+    }
+
+
 class CampaignWorker:
     """Drives campaign assignments through their step list."""
 
@@ -97,12 +132,24 @@ class CampaignWorker:
         db: Session,
         *,
         email_sender: EmailSender | None = None,
+        agent: SalesAgent | None = None,
         now: datetime | None = None,
     ) -> None:
         self.db = db
         self.email_sender = email_sender or get_email_sender()
+        # Lazy default: agent is only constructed when actually used so
+        # template-only campaigns never pay the import cost.
+        self._agent_override = agent
         # Allow tests to pin a deterministic clock.
         self._fixed_now = now
+
+    @property
+    def agent(self) -> SalesAgent:
+        if self._agent_override is not None:
+            return self._agent_override
+        # Cache so each worker instance shares one agent.
+        self._agent_override = SalesAgent()
+        return self._agent_override
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -227,7 +274,7 @@ class CampaignWorker:
             return
 
         try:
-            await self._execute_step(step, lead, stats)
+            await self._execute_step(step, lead, assignment.campaign, stats)
         except Exception as exc:
             logger.warning(
                 "campaign_worker: step %s failed for assignment %s: %s",
@@ -262,11 +309,15 @@ class CampaignWorker:
         self.db.commit()
 
     async def _execute_step(
-        self, step: CampaignStep, lead: Lead, stats: WorkerStats
+        self,
+        step: CampaignStep,
+        lead: Lead,
+        campaign: Campaign,
+        stats: WorkerStats,
     ) -> None:
         step_type = (step.type or "").lower().strip()
         if step_type == "email":
-            await self._send_email_step(step, lead, stats)
+            await self._send_email_step(step, lead, campaign, stats)
             return
         if step_type in ("call", "task"):
             # v1: log only — surfacing as a UI todo is a follow-up.
@@ -284,19 +335,79 @@ class CampaignWorker:
         )
 
     async def _send_email_step(
-        self, step: CampaignStep, lead: Lead, stats: WorkerStats
+        self,
+        step: CampaignStep,
+        lead: Lead,
+        campaign: Campaign,
+        stats: WorkerStats,
     ) -> None:
         if not lead.email:
             raise ValueError(f"lead {lead.id} has no email address")
-        subject = render_template(step.subject or step.title or "", lead)
-        body = render_template(step.content or "", lead)
-        message = EmailMessage(to=lead.email, subject=subject, body=body)
-        result = await self.email_sender.send(message)
+
+        if _is_agent_step(step):
+            subject, body = await self._draft_with_agent(step, lead, campaign, stats)
+        else:
+            subject = render_template(step.subject or step.title or "", lead)
+            body = render_template(step.content or "", lead)
+
+        result = await self.email_sender.send(
+            EmailMessage(to=lead.email, subject=subject, body=body)
+        )
         if not result.success:
             raise RuntimeError(
                 f"email send failed via {result.provider}: {result.error}"
             )
         stats.emails_sent += 1
 
+    async def _draft_with_agent(
+        self,
+        step: CampaignStep,
+        lead: Lead,
+        campaign: Campaign,
+        stats: WorkerStats,
+    ) -> tuple[str, str]:
+        """Run the agent for this lead and persist an ``AgentExecution`` row."""
+        initial_state: AgentState = {
+            "lead": _lead_to_dict(lead),
+            "user_id": str(campaign.created_by),
+            "tenant_id": str(campaign.tenant_id),
+            "agent_type": "campaign_email",
+            "current_step": "initialized",
+            "trajectory": [],
+            "tokens_input": 0,
+            "tokens_output": 0,
+            "cost_cents": 0,
+        }
+        started_at = datetime.utcnow()
+        result = await self.agent.run(initial_state)
+        completed_at = datetime.utcnow()
+        stats.agent_runs += 1
 
-__all__ = ["CampaignWorker", "WorkerStats", "render_template"]
+        execution = AgentExecution(
+            id=uuid.uuid4(),
+            tenant_id=campaign.tenant_id,
+            user_id=campaign.created_by,
+            lead_id=lead.id,
+            agent_type="campaign_email",
+            trajectory=result.get("trajectory", []),
+            success=bool(result.get("success", False)),
+            tokens_input=int(result.get("tokens_input", 0)),
+            tokens_output=int(result.get("tokens_output", 0)),
+            cost_cents=int(result.get("cost_cents", 0)),
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+        self.db.add(execution)
+        # Caller commits after advancing the assignment so audit + agent row
+        # land in the same transaction.
+
+        subject = result.get("draft_subject") or render_template(
+            step.subject or step.title or "Quick question", lead
+        )
+        body = result.get("draft_email") or ""
+        if not body:
+            raise RuntimeError("agent produced an empty email body")
+        return subject, body
+
+
+__all__ = ["CampaignWorker", "WorkerStats", "render_template", "AGENT_MARKER"]
